@@ -92,6 +92,25 @@ router.post('/dm', protect, async (req, res) => {
   }
 });
 
+// @desc    Delete a direct chat for the current user
+// @route   DELETE /api/channels/:channelId
+// @access  Private (channel member)
+router.delete('/:channelId', protect, async (req, res) => {
+  try {
+    const channel = await Channel.findById(req.params.channelId);
+    if (!channel) return res.status(404).json({ message: 'Chat not found' });
+    if (!channel.members.map(member => member.toString()).includes(req.user._id.toString())) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await Message.deleteMany({ channel: channel._id });
+    await Channel.findByIdAndDelete(channel._id);
+    res.json({ channelId: channel._id });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @desc    Add a user to a channel
 // @route   POST /api/channels/:channelId/members
 // @access  Private (member of channel)

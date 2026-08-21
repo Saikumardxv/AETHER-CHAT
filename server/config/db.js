@@ -275,9 +275,27 @@ const createMockModel = (modelName, schema) => {
       if (doc) {
         Object.assign(doc, update);
         doc.updatedAt = new Date();
+        savePersistentStore();
         return new MockModel(doc);
       }
       return null;
+    }
+
+    static async findByIdAndDelete(id) {
+      const index = dbStore[modelName].findIndex(item => item._id.toString() === id.toString());
+      if (index === -1) return null;
+      const [deleted] = dbStore[modelName].splice(index, 1);
+      savePersistentStore();
+      return new MockModel(deleted);
+    }
+
+    static async deleteMany(filter = {}) {
+      const matches = dbStore[modelName].filter(item => {
+        return Object.keys(filter).every(key => item[key]?.toString() === filter[key]?.toString());
+      });
+      dbStore[modelName] = dbStore[modelName].filter(item => !matches.includes(item));
+      if (matches.length > 0) savePersistentStore();
+      return { deletedCount: matches.length };
     }
   }
 

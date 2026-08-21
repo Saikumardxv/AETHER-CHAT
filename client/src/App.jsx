@@ -66,11 +66,6 @@ const App = () => {
 
     newSocket.on('connect', () => {
       console.log(`[AUTH] Socket.IO connection established for ${user.username}`);
-      setUser(prev => {
-        const updatedUser = { ...prev, status: 'online' };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        return updatedUser;
-      });
     });
 
     newSocket.on('connect_error', (err) => {

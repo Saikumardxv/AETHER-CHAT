@@ -30,6 +30,19 @@ router.post('/register', async (req, res) => {
 
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
     if (userExists) {
+      if (userExists.email === email && userExists.isEmailVerified === false) {
+        const emailVerificationCode = String(Math.floor(100000 + Math.random() * 900000));
+        userExists.emailVerificationCode = emailVerificationCode;
+        await userExists.save();
+        console.log(`[AUTH] Verification code regenerated for unverified email ${email}`);
+        return res.status(200).json({
+          username: userExists.username,
+          email: userExists.email,
+          verificationRequired: true,
+          verificationCode: emailVerificationCode,
+          message: 'This email is already registered but not verified. A new verification code was created.',
+        });
+      }
       console.warn(`[AUTH] Registration rejected: account already exists for ${email}`);
       return res.status(400).json({ message: 'User already exists with this email or username' });
     }
@@ -42,6 +55,7 @@ router.post('/register', async (req, res) => {
       'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150'
     ];
     const randomAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+    const emailVerificationCode = String(Math.floor(100000 + Math.random() * 900000));
 
     const user = await User.create({
       username,
@@ -49,6 +63,8 @@ router.post('/register', async (req, res) => {
       password: await bcrypt.hash(password, 10),
       avatarUrl: randomAvatar,
       status: 'offline',
+      isEmailVerified: false,
+      emailVerificationCode,
     });
 
     if (user) {
@@ -59,7 +75,8 @@ router.post('/register', async (req, res) => {
         email: user.email,
         avatarUrl: user.avatarUrl,
         status: user.status,
-        token: generateToken(user._id),
+        verificationRequired: true,
+        verificationCode: emailVerificationCode,
       });
     } else {
       console.warn('[AUTH] Registration failed: user was not created');
@@ -67,6 +84,28 @@ router.post('/register', async (req, res) => {
     }
   } catch (error) {
     console.error(`[AUTH] Registration error for ${email || '(unknown email)'}`, error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Confirm a new user's email verification code
+// @route   POST /api/auth/verify-email
+// @access  Public
+router.post('/verify-email', async (req, res) => {
+  const email = req.body.email?.trim().toLowerCase();
+  const code = req.body.code?.trim();
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user || user.emailVerificationCode !== code) {
+      return res.status(400).json({ message: 'Invalid email verification code' });
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationCode = '';
+    await user.save();
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
@@ -95,6 +134,9 @@ router.post('/login', async (req, res) => {
     });
 
     if (user && (await user.matchPassword(password))) {
+      if (user.isEmailVerified === false) {
+        return res.status(403).json({ message: 'Please verify your email before signing in' });
+      }
       console.log(`[AUTH] Login successful: ${user.username} (${user._id})`);
       res.json({
         _id: user._id,

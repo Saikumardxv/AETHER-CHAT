@@ -6,6 +6,10 @@ import Channel from '../models/Channel.js';
 // Map of userId -> Set of socket.id
 const onlineUsers = new Map();
 
+const emitPresenceSnapshot = (socket) => {
+  socket.emit('presence_snapshot', { userIds: Array.from(onlineUsers.keys()) });
+};
+
 // Helper: fully populate a message
 const populateMessage = (query) =>
   query
@@ -54,14 +58,22 @@ export const initSocket = (io) => {
     // Track online users
     if (!onlineUsers.has(userId)) {
       onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socket.id);
+
+    if (onlineUsers.get(userId).size === 1) {
       try {
         await User.findByIdAndUpdate(userId, { status: 'online' });
-        socket.broadcast.emit('user_status', { userId, status: 'online' });
+        io.emit('user_status', { userId, status: 'online' });
       } catch (err) {
         console.error('Error updating user online status:', err);
       }
     }
-    onlineUsers.get(userId).add(socket.id);
+    emitPresenceSnapshot(socket);
+
+    socket.on('presence_request', () => {
+      emitPresenceSnapshot(socket);
+    });
 
     // Join all channel rooms
     try {
@@ -210,25 +222,39 @@ export const initSocket = (io) => {
     });
 
     // ── React to message ───────────────────────────────────────────────
-    socket.on('react_message', async ({ channelId, messageId, emoji }) => {
+    socket.on('react_message', async ({ channelId, messageId, emoji }, acknowledge) => {
       try {
-        if (typeof emoji !== 'string' || !emoji.trim() || emoji.length > 16) return;
+        console.log(`[REACTION] ${socket.user.username} selected ${emoji} on message ${messageId}`);
+        if (typeof emoji !== 'string' || !emoji.trim() || emoji.length > 16) {
+          return acknowledge?.({ ok: false, message: 'Invalid reaction' });
+        }
         const message = await Message.findById(messageId);
-        if (!message || message.isDeleted) return;
+        if (!message || message.isDeleted) {
+          return acknowledge?.({ ok: false, message: 'Message is unavailable' });
+        }
 
         const channel = await Channel.findById(channelId);
-        if (!channel || !channel.members.map(m => m.toString()).includes(userId)) return;
+        if (!channel || !channel.members.map(m => m.toString()).includes(userId)) {
+          return acknowledge?.({ ok: false, message: 'Not authorized' });
+        }
+
+        if (!Array.isArray(message.reactions)) {
+          message.reactions = [];
+        }
 
         const reactionIdx = message.reactions.findIndex(r => r.emoji === emoji);
         if (reactionIdx === -1) {
           message.reactions.push({ emoji, users: [socket.user._id] });
         } else {
-          const userIdx = message.reactions[reactionIdx].users.findIndex(u => u.toString() === userId);
+          const reactionUsers = Array.isArray(message.reactions[reactionIdx].users)
+            ? message.reactions[reactionIdx].users
+            : [];
+          const userIdx = reactionUsers.findIndex(u => String(u?._id || u) === userId);
           if (userIdx === -1) {
-            message.reactions[reactionIdx].users.push(socket.user._id);
+            reactionUsers.push(socket.user._id);
           } else {
-            message.reactions[reactionIdx].users.splice(userIdx, 1);
-            if (message.reactions[reactionIdx].users.length === 0) {
+            reactionUsers.splice(userIdx, 1);
+            if (reactionUsers.length === 0) {
               message.reactions.splice(reactionIdx, 1);
             }
           }
@@ -241,8 +267,15 @@ export const initSocket = (io) => {
           channelId,
           reactions: updatedMessage.reactions,
         });
+        acknowledge?.({
+          ok: true,
+          messageId,
+          reactions: updatedMessage.reactions,
+        });
+        console.log(`[REACTION] Saved reaction on message ${messageId}`);
       } catch (err) {
         console.error('Error processing reaction:', err);
+        acknowledge?.({ ok: false, message: 'Reaction could not be saved' });
       }
     });
 

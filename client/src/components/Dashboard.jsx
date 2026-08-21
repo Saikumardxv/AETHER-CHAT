@@ -3,11 +3,11 @@ import axios from 'axios';
 import { 
   Hash, Plus, MessageSquare, Send, Paperclip, Search, 
   Info, LogOut, X, FileText, Download, Check, CheckCheck, 
-  Smile, Reply, Pencil, Trash2, CornerUpLeft
+  Smile, Pencil, Trash2, CornerUpLeft, Sun, Moon, UserRound
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
-const Dashboard = ({ user, socket, onLogout }) => {
+const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   // ── Channels & Users ─────────────────────────────────────────────────
   const [channels, setChannels] = useState([]);
   const [activeChannel, setActiveChannel] = useState(null);
@@ -18,6 +18,11 @@ const Dashboard = ({ user, socket, onLogout }) => {
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [typingUsers, setTypingUsers] = useState({});
+  const [isSocketOnline, setIsSocketOnline] = useState(Boolean(socket?.connected));
+  const [onlineUserIds, setOnlineUserIds] = useState(() => new Set());
+  const [reactionNotice, setReactionNotice] = useState('');
+  const [selectedReaction, setSelectedReaction] = useState(null);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState(() => new Set());
 
   // ── Reply ─────────────────────────────────────────────────────────────
   const [replyingTo, setReplyingTo] = useState(null); // { _id, content, sender }
@@ -28,6 +33,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
 
   // ── Emoji picker ──────────────────────────────────────────────────────
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [actionMessageId, setActionMessageId] = useState(null);
 
   // ── UI ────────────────────────────────────────────────────────────────
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -41,8 +47,8 @@ const Dashboard = ({ user, socket, onLogout }) => {
   // ── Profile editing ───────────────────────────────────────────────────
   const [profileUsername, setProfileUsername] = useState(user.username);
   const [profileAvatar, setProfileAvatar] = useState(user.avatarUrl || '');
-  const [profileStatus, setProfileStatus] = useState(user.status || 'online');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // ── Search ────────────────────────────────────────────────────────────
   const [msgSearchQuery, setMsgSearchQuery] = useState('');
@@ -53,10 +59,12 @@ const Dashboard = ({ user, socket, onLogout }) => {
   const [selectedFile, setSelectedFile] = useState(null);
 
   const fileInputRef = useRef(null);
+  const profileFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const longPressTimerRef = useRef(null);
 
   // ── Initial data fetch ────────────────────────────────────────────────
   useEffect(() => {
@@ -68,17 +76,35 @@ const Dashboard = ({ user, socket, onLogout }) => {
   useEffect(() => {
     if (!socket) return;
 
+    setIsSocketOnline(socket.connected);
+    socket.on('connect', () => {
+      setIsSocketOnline(true);
+      fetchChannels();
+      fetchUsers();
+      socket.emit('presence_request');
+    });
+    socket.on('disconnect', () => setIsSocketOnline(false));
+
+    socket.on('presence_snapshot', ({ userIds }) => {
+      setOnlineUserIds(new Set((userIds || []).map(String)));
+    });
+
     socket.on('user_status', ({ userId, status }) => {
-      setAllUsers(prev => prev.map(u => u._id === userId ? { ...u, status } : u));
+      const normalizedUserId = String(userId);
+      setOnlineUserIds(prev => {
+        const next = new Set(prev);
+        if (status === 'online') next.add(normalizedUserId);
+        else next.delete(normalizedUserId);
+        return next;
+      });
+      setAllUsers(prev => prev.map(u => String(u._id) === normalizedUserId ? { ...u, status } : u));
       setChannels(prev => prev.map(ch => {
-        if (!ch.isGroup) {
-          return {
-            ...ch,
-            members: ch.members.map(m => m._id === userId ? { ...m, status } : m)
-          };
-        }
-        return ch;
+        return { ...ch, members: ch.members.map(m => String(m._id) === normalizedUserId ? { ...m, status } : m) };
       }));
+      setActiveChannel(prev => prev ? {
+        ...prev,
+        members: prev.members.map(m => String(m._id) === normalizedUserId ? { ...m, status } : m),
+      } : prev);
     });
 
     socket.on('receive_message', (message) => {
@@ -134,6 +160,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
 
     // Phase 2: reaction update
     socket.on('message_reaction', ({ messageId, reactions }) => {
+      console.log(`[REACTION] Update received for message ${messageId}`);
       setMessages(prev => prev.map(msg =>
         msg._id === messageId ? { ...msg, reactions } : msg
       ));
@@ -151,9 +178,18 @@ const Dashboard = ({ user, socket, onLogout }) => {
       setMessages(prev => prev.map(msg =>
         msg._id === messageId ? { ...msg, isDeleted: true, content: '', fileUrl: '', fileName: '', fileType: '' } : msg
       ));
+      setActionMessageId(null);
+    });
+
+    socket.on('error_message', ({ message }) => {
+      console.error('[DM] Message action failed:', message);
+      if (activeChannel?._id) fetchMessages(activeChannel._id);
     });
 
     return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('presence_snapshot');
       socket.off('user_status');
       socket.off('receive_message');
       socket.off('channel_updated');
@@ -163,6 +199,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
       socket.off('message_reaction');
       socket.off('message_edited');
       socket.off('message_deleted');
+      socket.off('error_message');
     };
   }, [socket, activeChannel]);
 
@@ -197,6 +234,14 @@ const Dashboard = ({ user, socket, onLogout }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setAllUsers(res.data);
+      setOnlineUserIds(prev => {
+        const next = new Set(prev);
+        res.data.forEach(directoryUser => {
+          if (directoryUser.status === 'online') next.add(String(directoryUser._id));
+          else next.delete(String(directoryUser._id));
+        });
+        return next;
+      });
     } catch (err) { console.error('Fetch users failed:', err); }
   };
 
@@ -358,11 +403,48 @@ const Dashboard = ({ user, socket, onLogout }) => {
 
   // ── React to Message ──────────────────────────────────────────────────
   const handleReact = (messageId, emoji) => {
-    if (!socket || !activeChannel) return;
-    socket.emit('react_message', {
+    if (!socket || !socket.connected || !activeChannel) {
+      console.warn('[REACTION] Cannot react: socket is not connected');
+      return;
+    }
+
+    console.log(`[REACTION] Sending ${emoji} for message ${messageId}`);
+
+    setMessages(prev => prev.map(msg => {
+      if (msg._id !== messageId) return msg;
+      const reactions = Array.isArray(msg.reactions) ? msg.reactions.map(r => ({
+        ...r,
+        users: Array.isArray(r.users) ? [...r.users] : [],
+      })) : [];
+      const reactionIndex = reactions.findIndex(r => r.emoji === emoji);
+      if (reactionIndex === -1) {
+        reactions.push({ emoji, users: [user._id] });
+      } else {
+        const users = reactions[reactionIndex].users;
+        const userIndex = users.findIndex(reactionUser => reactionUserId(reactionUser) === String(user._id));
+        if (userIndex === -1) users.push(user._id);
+        else users.splice(userIndex, 1);
+        if (users.length === 0) reactions.splice(reactionIndex, 1);
+      }
+      return { ...msg, reactions };
+    }));
+
+    socket.timeout(5000).emit('react_message', {
       channelId: activeChannel._id,
       messageId,
       emoji,
+    }, (timeoutError, result) => {
+      if (timeoutError || !result?.ok) {
+        console.error('[REACTION] Failed:', timeoutError?.message || result?.message || 'No server acknowledgement');
+        fetchMessages(activeChannel._id);
+        return;
+      }
+      setMessages(prev => prev.map(msg =>
+        msg._id === result.messageId ? { ...msg, reactions: result.reactions } : msg
+      ));
+      console.log(`[REACTION] Saved ${emoji} for message ${messageId}`);
+      setReactionNotice(`${emoji} reaction saved`);
+      setTimeout(() => setReactionNotice(''), 1400);
     });
   };
 
@@ -403,7 +485,46 @@ const Dashboard = ({ user, socket, onLogout }) => {
   // ── Delete Message ────────────────────────────────────────────────────
   const handleDelete = (messageId) => {
     if (!socket || !activeChannel) return;
+    setMessages(prev => prev.map(msg =>
+      msg._id === messageId ? { ...msg, isDeleted: true, content: '', fileUrl: '', fileName: '', fileType: '' } : msg
+    ));
+    setActionMessageId(null);
     socket.emit('delete_message', { channelId: activeChannel._id, messageId });
+  };
+
+  const handleDeleteForMe = (messageId) => {
+    setHiddenMessageIds(prev => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+  };
+
+  const handleDeleteChat = async () => {
+    if (!activeChannel || !window.confirm('Delete this chat and its messages?')) return;
+    try {
+      await axios.delete(`/api/channels/${activeChannel._id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      const remainingChannels = channels.filter(channel => channel._id !== activeChannel._id);
+      setChannels(remainingChannels);
+      setActiveChannel(remainingChannels[0] || null);
+      setMessages([]);
+    } catch (error) {
+      console.error('Delete chat failed:', error);
+      alert(error.response?.data?.message || 'Could not delete this chat');
+    }
+  };
+
+  const startLongPress = (messageId) => {
+    longPressTimerRef.current = setTimeout(() => setActionMessageId(messageId), 500);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
   };
 
   // ── Search ────────────────────────────────────────────────────────────
@@ -427,11 +548,10 @@ const Dashboard = ({ user, socket, onLogout }) => {
       await axios.put('/api/auth/profile', {
         username: profileUsername,
         avatarUrl: profileAvatar,
-        status: profileStatus,
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
       // Update local user state in localStorage
-      const updatedUser = { ...user, username: profileUsername, avatarUrl: profileAvatar, status: profileStatus };
+      const updatedUser = { ...user, username: profileUsername, avatarUrl: profileAvatar };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setShowProfileModal(false);
       window.location.reload(); // Reload to reflect username changes
@@ -440,6 +560,29 @@ const Dashboard = ({ user, socket, onLogout }) => {
       alert('Failed to save profile. The profile update endpoint may not exist yet.');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const handleProfileAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await axios.post('/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      setProfileAvatar(response.data.fileUrl);
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+      alert('Could not upload profile picture. Please try another image.');
+    } finally {
+      setAvatarUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -452,11 +595,15 @@ const Dashboard = ({ user, socket, onLogout }) => {
 
   const getDMRecipient = (channel) => {
     if (!channel || channel.isGroup) return null;
-    return channel.members.find(m => m._id !== user._id);
+    return channel.members.find(m => String(m._id) !== String(user._id));
   };
 
   const typingState = activeChannel ? typingUsers[activeChannel._id] || {} : {};
   const typingNames = Object.values(typingState);
+  const currentUserOnline = isSocketOnline;
+  const dmRecipient = activeChannel && !activeChannel.isGroup ? getDMRecipient(activeChannel) : null;
+  const dmRecipientOnline = Boolean(dmRecipient && onlineUserIds.has(String(dmRecipient._id)));
+  const isUserOnline = (userId) => onlineUserIds.has(String(userId));
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -513,7 +660,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
             {channels.filter(c => !c.isGroup).map(c => {
               const recipient = getDMRecipient(c);
               if (!recipient) return null;
-              const isOnline = recipient.status === 'online';
+              const isOnline = onlineUserIds.has(String(recipient._id));
               return (
                 <button
                   key={c._id}
@@ -552,11 +699,11 @@ const Dashboard = ({ user, socket, onLogout }) => {
                 alt=""
                 className="avatar"
               />
-              <div className="status-indicator online" style={styles.statusInList}></div>
+              <div className={`status-indicator ${currentUserOnline ? 'online' : 'offline'}`} style={styles.statusInList}></div>
             </div>
             <div style={styles.userInfo}>
               <div style={styles.userUsername}>{user.username}</div>
-              <div style={styles.userEmail}>Online · Edit Profile</div>
+              <div style={styles.userEmail}>{currentUserOnline ? 'Online now' : 'Offline'}</div>
             </div>
           </button>
           <button onClick={onLogout} style={styles.logoutButton} title="Logout">
@@ -576,17 +723,49 @@ const Dashboard = ({ user, socket, onLogout }) => {
                   {activeChannel.isGroup ? (
                     <><Hash size={20} style={styles.headerHash} /><span>{activeChannel.name}</span></>
                   ) : (
-                    <span>{getDMRecipient(activeChannel)?.username}</span>
+                    <span>{dmRecipient?.username}</span>
                   )}
                 </h2>
                 <span className="headerDesc" style={styles.headerDesc}>
                   {activeChannel.isGroup
                     ? activeChannel.description || 'No description set'
-                    : `DM with ${getDMRecipient(activeChannel)?.username}`
+                    : (
+                      <span className={`active-person-status ${dmRecipientOnline ? 'online' : ''}`}>
+                        <span className="active-person-status-dot" />
+                        {dmRecipientOnline ? 'online now' : 'offline'}
+                      </span>
+                    )
                   }
                 </span>
               </div>
               <div style={styles.headerActions}>
+                <button
+                  type="button"
+                  className="chat-header-action danger"
+                  onClick={handleDeleteChat}
+                  title="Delete chat"
+                  aria-label="Delete chat"
+                >
+                  <Trash2 size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="chat-header-action"
+                  onClick={() => setShowProfileModal(true)}
+                  title="Open profile"
+                  aria-label="Open profile"
+                >
+                  <UserRound size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="chat-theme-toggle"
+                  onClick={onToggleTheme}
+                  aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+                  title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+                >
+                  {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                </button>
                 <button
                   onClick={() => setShowDetails(!showDetails)}
                   style={{ ...styles.actionBtn, color: showDetails ? 'var(--color-primary-light)' : 'var(--text-muted)' }}
@@ -598,6 +777,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
 
             {/* Message List */}
             <div className="messageStream" style={styles.messageStream}>
+              {reactionNotice && <div className="reaction-notice" role="status">{reactionNotice}</div>}
               <div style={styles.messageContainerInner}>
 
                 {searchedMessages && (
@@ -610,6 +790,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
                 )}
 
                 {(searchedMessages || messages).map((msg, idx, arr) => {
+                  if (hiddenMessageIds.has(msg._id)) return null;
                   const isMe = msg.sender._id === user._id;
                   const isReadByAll = activeChannel.members.length > 1 &&
                     msg.readBy.length >= activeChannel.members.length;
@@ -623,49 +804,76 @@ const Dashboard = ({ user, socket, onLogout }) => {
                   return (
                     <div
                       key={msg._id}
-                      className="message-row-wrapper animate-fade-in"
-                      style={{ ...styles.messageRow, ...(isCompact ? styles.compactRow : {}) }}
+                      className={`message-row-wrapper ${isMe ? 'message-row-sent' : 'message-row-received'} animate-fade-in ${actionMessageId === msg._id ? 'actions-visible' : ''}`}
+                      style={{
+                        ...styles.messageRow,
+                        ...(isMe ? styles.sentMessageRow : styles.receivedMessageRow),
+                        ...(isCompact ? (isMe ? styles.compactSentRow : styles.compactRow) : {}),
+                      }}
+                      onTouchStart={() => startLongPress(msg._id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
                     >
                       {/* Context action toolbar (appears on hover) */}
                       {!msg.isDeleted && (
                         <div className="msg-actions">
-                          {/* Quick-react emojis */}
-                          {QUICK_EMOJIS.map(e => (
-                            <button
-                              key={e}
-                              className="msg-action-btn"
-                              onClick={() => handleReact(msg._id, e)}
-                              title={`React ${e}`}
-                              style={{ fontSize: '0.95rem' }}
-                            >
-                              {e}
-                            </button>
+                          {QUICK_EMOJIS.map(emoji => (
+                            (() => {
+                              const reaction = (Array.isArray(msg.reactions) ? msg.reactions : []).find(item => item.emoji === emoji);
+                              const users = Array.isArray(reaction?.users) ? reaction.users : [];
+                              const reactedByMe = users.some(reactionUser => reactionUserId(reactionUser) === String(user._id));
+                              return (
+                                <button
+                                  key={emoji}
+                                  className={`msg-action-btn emoji-action-btn ${reactedByMe ? 'active-reaction' : ''}`}
+                                  type="button"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onPointerUp={(event) => event.stopPropagation()}
+                                  onTouchStart={(event) => event.stopPropagation()}
+                                  onTouchEnd={(event) => event.stopPropagation()}
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    console.log(`[REACTION] ${reactedByMe ? 'Removing' : 'Adding'} ${emoji} on message ${msg._id}`);
+                                    handleReact(msg._id, emoji);
+                                    setSelectedReaction({ messageId: msg._id, emoji });
+                                  }}
+                                  title={`${reactedByMe ? 'Remove' : 'Add'} ${emoji} reaction${users.length ? ` (${users.length})` : ''}`}
+                                >
+                                  <span>{emoji}</span>
+                                  {users.length > 0 && <span className="reaction-count">{users.length}</span>}
+                                </button>
+                              );
+                            })()
                           ))}
-                          <div style={{ width: 1, height: 16, background: 'var(--border-glass)', margin: '0 2px' }} />
-                          <button
-                            className="msg-action-btn"
-                            onClick={() => setReplyingTo(msg)}
-                            title="Reply"
-                          >
-                            <Reply size={14} />
-                          </button>
-                          {isMe && !msg.isDeleted && (
+                          <span className="msg-action-divider" />
+                          {isMe ? (
                             <>
                               <button
                                 className="msg-action-btn"
-                                onClick={() => startEdit(msg)}
+                                onClick={(event) => { event.stopPropagation(); startEdit(msg); }}
                                 title="Edit"
                               >
                                 <Pencil size={14} />
                               </button>
                               <button
                                 className="msg-action-btn danger"
-                                onClick={() => handleDelete(msg._id)}
+                                onClick={(event) => { event.stopPropagation(); handleDelete(msg._id); }}
                                 title="Delete"
                               >
                                 <Trash2 size={14} />
                               </button>
                             </>
+                          ) : (
+                            <button
+                              className="msg-action-btn danger"
+                              onClick={(event) => { event.stopPropagation(); handleDeleteForMe(msg._id); }}
+                              title="Delete for me"
+                              aria-label="Delete message for me"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           )}
                         </div>
                       )}
@@ -721,6 +929,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
                                   if (e.key === 'Escape') cancelEdit();
                                 }}
                               />
+
                               <div className="edit-actions">
                                 <button className="edit-save-btn" onClick={() => submitEdit(msg._id)}>Save</button>
                                 <button className="edit-cancel-btn" onClick={cancelEdit}>Cancel</button>
@@ -771,24 +980,38 @@ const Dashboard = ({ user, socket, onLogout }) => {
                           )}
                         </div>
 
-                        {/* Reactions row */}
-                        {!msg.isDeleted && msg.reactions && msg.reactions.length > 0 && (
-                          <div className="reactions-row">
-                            {msg.reactions.map(r => {
-                              const reactionUsers = Array.isArray(r.users) ? r.users : [];
-                              const iMine = reactionUsers.some(uid => reactionUserId(uid) === String(user._id));
-                              return (
+                        {!msg.isDeleted && Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
+                          <div className="message-reaction-summary" aria-label="Message reactions">
+                            {msg.reactions.map(reaction => (
+                              <div key={reaction.emoji} className="message-reaction-summary-wrap">
                                 <button
-                                  key={r.emoji}
-                                  className={`reaction-pill ${iMine ? 'mine' : ''}`}
-                                  onClick={() => handleReact(msg._id, r.emoji)}
-                                  title={`${reactionUsers.length} reaction${reactionUsers.length > 1 ? 's' : ''}`}
+                                  type="button"
+                                  className={`message-reaction-summary-item ${selectedReaction?.messageId === msg._id && selectedReaction.emoji === reaction.emoji ? 'selected-reaction' : ''}`}
+                                  onClick={() => setSelectedReaction(current => (
+                                    current?.messageId === msg._id && current.emoji === reaction.emoji
+                                      ? null
+                                      : { messageId: msg._id, emoji: reaction.emoji }
+                                  ))}
+                                  title="View people who reacted"
                                 >
-                                  <span className="r-emoji">{r.emoji}</span>
-                                  <span className="r-count">{reactionUsers.length}</span>
+                                  {reaction.emoji} {Array.isArray(reaction.users) ? reaction.users.length : 0}
                                 </button>
-                              );
-                            })}
+                                {selectedReaction?.messageId === msg._id && selectedReaction.emoji === reaction.emoji && (
+                                  <div className="reaction-user-list">
+                                    {(Array.isArray(reaction.users) ? reaction.users : []).map(reactionUser => (
+                                      <div key={reactionUserId(reactionUser)} className="reaction-user-item">
+                                        <img
+                                          src={reactionUser.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${reactionUser.username || reactionUserId(reactionUser)}`}
+                                          alt=""
+                                          className="avatar xs"
+                                        />
+                                        <span>{reactionUser.username || 'User'}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         )}
 
@@ -882,7 +1105,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
                   placeholder={`Message ${activeChannel.isGroup ? '#' + activeChannel.name : getDMRecipient(activeChannel)?.username || ''}`}
                   value={messageText}
                   onChange={handleMessageChange}
-                  style={styles.chatInput}
+                  style={{ ...styles.chatInput, color: 'var(--text-main)', background: 'transparent' }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSendMessage(e); }}
                 />
 
@@ -951,7 +1174,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
               <h4 style={styles.sectionHeader}>Members ({activeChannel.members.length})</h4>
               <div style={styles.membersList}>
                 {activeChannel.members.map(member => {
-                  const isOnline = member.status === 'online';
+                  const isOnline = isUserOnline(member._id);
                   return (
                     <div key={member._id} style={styles.memberItem}>
                       <div className="avatar-wrapper">
@@ -1064,7 +1287,7 @@ const Dashboard = ({ user, socket, onLogout }) => {
                 </div>
               ) : (
                 allUsers.map(u => {
-                  const isOnline = u.status === 'online';
+                  const isOnline = isUserOnline(u._id);
                   return (
                     <button
                       key={u._id}
@@ -1111,7 +1334,25 @@ const Dashboard = ({ user, socket, onLogout }) => {
                 alt=""
                 className="avatar lg"
               />
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-dark)' }}>Avatar updates via URL below</span>
+              <div className={`active-person-status ${currentUserOnline ? 'online' : ''}`}>
+                <span className="active-person-status-dot" />
+                {currentUserOnline ? 'online now' : 'offline'}
+              </div>
+              <input
+                ref={profileFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleProfileAvatarChange}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                className="profile-avatar-edit-button"
+                onClick={() => profileFileInputRef.current?.click()}
+                disabled={avatarUploading}
+              >
+                {avatarUploading ? 'Uploading...' : 'Change profile picture'}
+              </button>
             </div>
 
             <div style={styles.modalForm}>
@@ -1135,26 +1376,6 @@ const Dashboard = ({ user, socket, onLogout }) => {
                   style={styles.modalInput}
                   placeholder="https://example.com/avatar.jpg"
                 />
-              </div>
-
-              <div style={styles.modalGroup}>
-                <label style={styles.modalLabel} className="profile-section-label">Status</label>
-                <div className="profile-status-row">
-                  <button
-                    className={`status-option-btn ${profileStatus === 'online' ? 'active-online' : ''}`}
-                    onClick={() => setProfileStatus('online')}
-                    type="button"
-                  >
-                    ● Online
-                  </button>
-                  <button
-                    className={`status-option-btn ${profileStatus === 'offline' ? 'active-offline' : ''}`}
-                    onClick={() => setProfileStatus('offline')}
-                    type="button"
-                  >
-                    ○ Offline
-                  </button>
-                </div>
               </div>
 
               <button
@@ -1341,9 +1562,20 @@ const styles = {
     gap: '14px',
     maxWidth: '85%',
   },
+  sentMessageRow: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row-reverse',
+  },
+  receivedMessageRow: {
+    alignSelf: 'flex-start',
+  },
   compactRow: {
     marginTop: '-12px',
     paddingLeft: '54px',
+  },
+  compactSentRow: {
+    marginTop: '-12px',
+    paddingRight: '54px',
   },
   messageContentBlock: {
     display: 'flex',

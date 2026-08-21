@@ -31,6 +31,14 @@ const userSchema = new mongoose.Schema({
   lastSeen: {
     type: Date,
     default: Date.now,
+  },
+  isEmailVerified: {
+    type: Boolean,
+    default: true,
+  },
+  emailVerificationCode: {
+    type: String,
+    default: '',
   }
 }, {
   timestamps: true

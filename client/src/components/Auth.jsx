@@ -11,6 +11,8 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [registrationSent, setRegistrationSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [developmentCode, setDevelopmentCode] = useState('');
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -27,6 +29,8 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
       console.log(`[AUTH] ${isLogin ? 'Login' : 'Registration'} request succeeded for ${response.data.username}`);
 
       if (!isLogin) {
+        setDevelopmentCode(response.data.verificationCode || '');
+        setError('');
         setRegistrationSent(true);
         return;
       }
@@ -41,6 +45,24 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
       setError(err.response?.data?.message || (err.request
         ? 'The chat server is unavailable. Start the server and try again.'
         : 'Something went wrong. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await axios.post('/api/auth/verify-email', { email, code: verificationCode });
+      setRegistrationSent(false);
+      setIsLogin(true);
+      setPassword('');
+      setVerificationCode('');
+      setDevelopmentCode('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Email verification failed');
     } finally {
       setLoading(false);
     }
@@ -62,20 +84,35 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
             </div>
             <h2 style={styles.successTitle}>Check your email</h2>
             <p style={styles.successText}>
-              Your account was created successfully. Verification instructions are ready for <strong>{email}</strong>.
+              Confirm the email address <strong>{email}</strong> before signing in.
             </p>
-            <button
-              type="button"
-              className="success-action"
-              onClick={() => {
-                setRegistrationSent(false);
-                setIsLogin(true);
-                setPassword('');
-                setError('');
-              }}
-            >
-              Return to login
-              <LogIn size={17} />
+            {developmentCode && (
+              <p style={styles.verificationHint}>Development verification code: <strong>{developmentCode}</strong></p>
+            )}
+            <form onSubmit={handleVerifyEmail} style={styles.form}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Email verification code</label>
+                <div style={styles.inputWrapper}>
+                  <MailCheck size={18} style={styles.icon} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={verificationCode}
+                    onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                    style={styles.input}
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" className="submit-button" disabled={loading} style={styles.submitButton}>
+                {loading ? <Loader2 size={18} className="animate-pulse-soft" /> : <>Confirm email <MailCheck size={17} /></>}
+              </button>
+            </form>
+            <button type="button" className="success-action" onClick={() => { setRegistrationSent(false); setIsLogin(false); setError(''); }}>
+              Back to registration
+              <UserPlus size={17} />
             </button>
           </div>
         ) : (
@@ -282,6 +319,13 @@ const styles = {
     fontSize: '0.88rem',
     lineHeight: 1.6,
     textAlign: 'center',
+  },
+  verificationHint: {
+    color: 'var(--color-primary-light)',
+    fontSize: '0.78rem',
+    lineHeight: 1.5,
+    textAlign: 'center',
+    margin: 0,
   },
   errorContainer: {
     background: 'rgba(239, 68, 68, 0.1)',
