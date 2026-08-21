@@ -212,16 +212,12 @@ export const initSocket = (io) => {
     // ── React to message ───────────────────────────────────────────────
     socket.on('react_message', async ({ channelId, messageId, emoji }) => {
       try {
-        if (typeof emoji !== 'string' || !emoji.trim() || [...emoji].length > 16) {
-          return socket.emit('error_message', { message: 'Invalid reaction' });
-        }
+        if (typeof emoji !== 'string' || !emoji.trim() || emoji.length > 16) return;
         const message = await Message.findById(messageId);
-        if (!message || message.isDeleted || message.channel.toString() !== channelId) return;
+        if (!message || message.isDeleted) return;
 
         const channel = await Channel.findById(channelId);
-        if (!channel || !channel.members.map(m => m.toString()).includes(userId)) {
-          return socket.emit('error_message', { message: 'Not authorized' });
-        }
+        if (!channel || !channel.members.map(m => m.toString()).includes(userId)) return;
 
         const reactionIdx = message.reactions.findIndex(r => r.emoji === emoji);
         if (reactionIdx === -1) {

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { 
-  Hash, Plus, MessageSquare, Send, Paperclip, Search, Menu,
-  Info, LogOut, X, FileText, Download, Check, CheckCheck, Sun, Moon,
+  Hash, Plus, MessageSquare, Send, Paperclip, Search, 
+  Info, LogOut, X, FileText, Download, Check, CheckCheck, 
   Smile, Reply, Pencil, Trash2, CornerUpLeft
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
-const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
+const Dashboard = ({ user, socket, onLogout }) => {
   // ── Channels & Users ─────────────────────────────────────────────────
   const [channels, setChannels] = useState([]);
   const [activeChannel, setActiveChannel] = useState(null);
@@ -28,14 +28,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   // ── Emoji picker ──────────────────────────────────────────────────────
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [reactionPickerMessageId, setReactionPickerMessageId] = useState(null);
 
   // ── UI ────────────────────────────────────────────────────────────────
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDMModal, setShowDMModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [touchActionMessageId, setTouchActionMessageId] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
@@ -46,7 +43,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [profileAvatar, setProfileAvatar] = useState(user.avatarUrl || '');
   const [profileStatus, setProfileStatus] = useState(user.status || 'online');
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profileUploading, setProfileUploading] = useState(false);
 
   // ── Search ────────────────────────────────────────────────────────────
   const [msgSearchQuery, setMsgSearchQuery] = useState('');
@@ -61,8 +57,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
-  const longPressRef = useRef(null);
-  const touchStartRef = useRef(null);
 
   // ── Initial data fetch ────────────────────────────────────────────────
   useEffect(() => {
@@ -85,15 +79,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         }
         return ch;
       }));
-      setActiveChannel(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          members: prev.members.map(member =>
-            member._id === userId ? { ...member, status } : member
-          ),
-        };
-      });
     });
 
     socket.on('receive_message', (message) => {
@@ -374,99 +359,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   // ── React to Message ──────────────────────────────────────────────────
   const handleReact = (messageId, emoji) => {
     if (!socket || !activeChannel) return;
-
-    const toggleReaction = (prevMessages) => prevMessages.map(message => {
-      if (message._id !== messageId) return message;
-
-      const reactions = Array.isArray(message.reactions) ? message.reactions : [];
-      const reactionIndex = reactions.findIndex(reaction => reaction.emoji === emoji);
-      const nextReactions = reactions.map(reaction => ({
-        ...reaction,
-        users: Array.isArray(reaction.users) ? [...reaction.users] : [],
-      }));
-
-      if (reactionIndex === -1) {
-        nextReactions.push({ emoji, users: [user._id] });
-      } else {
-        const reaction = nextReactions[reactionIndex];
-        const userIndex = reaction.users.findIndex(reactionUser => reactionUserId(reactionUser) === String(user._id));
-        if (userIndex === -1) {
-          reaction.users.push(user._id);
-        } else {
-          reaction.users.splice(userIndex, 1);
-          if (reaction.users.length === 0) nextReactions.splice(reactionIndex, 1);
-        }
-      }
-
-      return { ...message, reactions: nextReactions };
-    });
-
-    setMessages(toggleReaction);
-    setSearchedMessages(prevMessages => prevMessages ? toggleReaction(prevMessages) : prevMessages);
-
     socket.emit('react_message', {
       channelId: activeChannel._id,
       messageId,
       emoji,
     });
-    setTouchActionMessageId(null);
-    setReactionPickerMessageId(null);
-  };
-
-  const handleProfileImageChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
-      return;
-    }
-
-    setProfileUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const response = await axios.post('/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      setProfileAvatar(response.data.fileUrl);
-    } catch (error) {
-      console.error('Profile image upload failed:', error);
-      alert('Could not upload the profile image.');
-    } finally {
-      setProfileUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  const handleMessageTouchStart = (event, messageId) => {
-    touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-    longPressRef.current = setTimeout(() => {
-      setTouchActionMessageId(messageId);
-      longPressRef.current = null;
-    }, 500);
-  };
-
-  const handleMessageTouchEnd = (event) => {
-    if (longPressRef.current) {
-      clearTimeout(longPressRef.current);
-      longPressRef.current = null;
-    }
-    const start = touchStartRef.current;
-    const end = event.changedTouches[0];
-    if (start && end && end.clientX - start.x > 70 && start.x < 90) {
-      setMobileSidebarOpen(true);
-    }
-    touchStartRef.current = null;
-  };
-
-  const handleSidebarTouchEnd = (event) => {
-    const start = touchStartRef.current;
-    const end = event.changedTouches[0];
-    if (start && end && start.x - end.clientX > 70) setMobileSidebarOpen(false);
-    touchStartRef.current = null;
   };
 
   const reactionUserId = (reactionUser) => {
@@ -560,15 +457,13 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   const typingState = activeChannel ? typingUsers[activeChannel._id] || {} : {};
   const typingNames = Object.values(typingState);
-  const activeRecipient = activeChannel && !activeChannel.isGroup ? getDMRecipient(activeChannel) : null;
-  const activeRecipientOnline = activeRecipient?.status === 'online';
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className={`app-container ${showDetails ? 'with-drawer' : ''} ${mobileSidebarOpen ? 'mobile-nav-open' : ''}`}>
+    <div className={`app-container ${showDetails ? 'with-drawer' : ''}`}>
 
       {/* ══ Sidebar ══════════════════════════════════════════════════════ */}
-      <div className="sidebar" style={styles.sidebar} onTouchStart={event => { touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={handleSidebarTouchEnd}>
+      <div className="sidebar" style={styles.sidebar}>
         {/* Brand */}
         <div className="sidebarHeader" style={styles.sidebarHeader}>
           <div style={styles.brandContainer}>
@@ -592,7 +487,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             {channels.filter(c => c.isGroup).map(c => (
               <button
                 key={c._id}
-                onClick={() => { setActiveChannel(c); setMobileSidebarOpen(false); }}
+                onClick={() => setActiveChannel(c)}
                 className="channelItem"
                 style={{ ...styles.channelItem, ...(activeChannel?._id === c._id ? styles.activeItem : {}) }}
               >
@@ -622,7 +517,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
               return (
                 <button
                   key={c._id}
-                  onClick={() => { setActiveChannel(c); setMobileSidebarOpen(false); }}
+                  onClick={() => setActiveChannel(c)}
                   className="channelItem"
                   style={{ ...styles.channelItem, ...(activeChannel?._id === c._id ? styles.activeItem : {}) }}
                 >
@@ -634,12 +529,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                     />
                     <div className={`status-indicator ${isOnline ? 'online' : 'offline'}`} style={styles.statusInList}></div>
                   </div>
-                  <span className="person-list-info">
-                    <span style={styles.channelName}>{recipient.username}</span>
-                    <span className={`person-list-status ${isOnline ? 'online' : 'offline'}`}>
-                      {isOnline ? 'Online' : 'Offline'}
-                    </span>
-                  </span>
+                  <span style={styles.channelName}>{recipient.username}</span>
                   {unreadCounts[c._id] > 0 && (
                     <span className="badge unread">{unreadCounts[c._id]}</span>
                   )}
@@ -662,11 +552,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                 alt=""
                 className="avatar"
               />
-              <div className={`status-indicator ${user.status === 'online' ? 'online' : 'offline'}`} style={styles.statusInList}></div>
+              <div className="status-indicator online" style={styles.statusInList}></div>
             </div>
             <div style={styles.userInfo}>
               <div style={styles.userUsername}>{user.username}</div>
-              <div style={styles.userEmail}>{user.status === 'offline' ? 'Offline' : 'Online'}</div>
+              <div style={styles.userEmail}>Online · Edit Profile</div>
             </div>
           </button>
           <button onClick={onLogout} style={styles.logoutButton} title="Logout">
@@ -676,50 +566,27 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       </div>
 
       {/* ══ Main Chat Area ════════════════════════════════════════════════ */}
-      <div className="chat-area" style={styles.chatArea} onTouchStart={event => { touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={handleMessageTouchEnd}>
+      <div className="chat-area" style={styles.chatArea}>
         {activeChannel ? (
           <>
             {/* Chat header */}
             <div className="chatHeader" style={styles.chatHeader}>
               <div style={styles.headerInfo}>
                 <h2 style={styles.headerTitle}>
-                  <button
-                    type="button"
-                    className="mobile-menu-button"
-                    onClick={() => setMobileSidebarOpen(true)}
-                    aria-label="Open navigation"
-                    title="Open navigation"
-                  >
-                    <Menu size={19} />
-                  </button>
                   {activeChannel.isGroup ? (
                     <><Hash size={20} style={styles.headerHash} /><span>{activeChannel.name}</span></>
                   ) : (
                     <span>{getDMRecipient(activeChannel)?.username}</span>
                   )}
                 </h2>
-                {activeRecipient && (
-                  <span className={`active-person-status ${activeRecipientOnline ? 'online' : 'offline'}`}>
-                    <span className="active-person-status-dot"></span>
-                    {activeRecipientOnline ? 'Online' : 'Offline'}
-                  </span>
-                )}
-                {activeChannel.isGroup && (
-                  <span className="headerDesc" style={styles.headerDesc}>
-                    {activeChannel.description || 'No description set'}
-                  </span>
-                )}
+                <span className="headerDesc" style={styles.headerDesc}>
+                  {activeChannel.isGroup
+                    ? activeChannel.description || 'No description set'
+                    : `DM with ${getDMRecipient(activeChannel)?.username}`
+                  }
+                </span>
               </div>
               <div style={styles.headerActions}>
-                <button
-                  type="button"
-                  className="chat-theme-toggle"
-                  onClick={onToggleTheme}
-                  aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
-                  title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
-                >
-                  {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-                </button>
                 <button
                   onClick={() => setShowDetails(!showDetails)}
                   style={{ ...styles.actionBtn, color: showDetails ? 'var(--color-primary-light)' : 'var(--text-muted)' }}
@@ -757,19 +624,15 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                     <div
                       key={msg._id}
                       className="message-row-wrapper animate-fade-in"
-                      onTouchStart={event => handleMessageTouchStart(event, msg._id)}
-                      onTouchEnd={handleMessageTouchEnd}
-                      onTouchCancel={handleMessageTouchEnd}
                       style={{ ...styles.messageRow, ...(isCompact ? styles.compactRow : {}) }}
                     >
                       {/* Context action toolbar (appears on hover) */}
                       {!msg.isDeleted && (
-                        <div className={`msg-actions ${touchActionMessageId === msg._id ? 'touch-visible' : ''}`}>
+                        <div className="msg-actions">
                           {/* Quick-react emojis */}
                           {QUICK_EMOJIS.map(e => (
                             <button
                               key={e}
-                              type="button"
                               className="msg-action-btn"
                               onClick={() => handleReact(msg._id, e)}
                               title={`React ${e}`}
@@ -778,18 +641,8 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                               {e}
                             </button>
                           ))}
-                          <button
-                            type="button"
-                            className="msg-action-btn reaction-more-btn"
-                            onClick={() => setReactionPickerMessageId(msg._id)}
-                            title="More reactions"
-                            aria-label="More reactions"
-                          >
-                            <Smile size={14} />
-                          </button>
                           <div style={{ width: 1, height: 16, background: 'var(--border-glass)', margin: '0 2px' }} />
                           <button
-                            type="button"
                             className="msg-action-btn"
                             onClick={() => setReplyingTo(msg)}
                             title="Reply"
@@ -799,7 +652,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                           {isMe && !msg.isDeleted && (
                             <>
                               <button
-                                type="button"
                                 className="msg-action-btn"
                                 onClick={() => startEdit(msg)}
                                 title="Edit"
@@ -807,7 +659,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                 <Pencil size={14} />
                               </button>
                               <button
-                                type="button"
                                 className="msg-action-btn danger"
                                 onClick={() => handleDelete(msg._id)}
                                 title="Delete"
@@ -929,7 +780,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                               return (
                                 <button
                                   key={r.emoji}
-                                  type="button"
                                   className={`reaction-pill ${iMine ? 'mine' : ''}`}
                                   onClick={() => handleReact(msg._id, r.emoji)}
                                   title={`${reactionUsers.length} reaction${reactionUsers.length > 1 ? 's' : ''}`}
@@ -955,15 +805,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                           </div>
                         )}
                       </div>
-
-                      {reactionPickerMessageId === msg._id && (
-                        <div className="message-reaction-picker">
-                          <EmojiPicker
-                            onSelect={emoji => handleReact(msg._id, emoji)}
-                            onClose={() => setReactionPickerMessageId(null)}
-                          />
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -1030,8 +871,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                   type="button"
                   onClick={() => setShowEmojiPicker(p => !p)}
                   className="inputButton"
-                  title="Add emoji"
-                  aria-label="Add emoji"
                   style={{ ...styles.inputButton, color: showEmojiPicker ? 'var(--color-primary-light)' : 'var(--text-muted)' }}
                 >
                   <Smile size={20} />
@@ -1260,7 +1099,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       {/* ══ Modal: Profile Editor ══════════════════════════════════════════ */}
       {showProfileModal && (
         <div style={styles.modalOverlay}>
-          <div className="glass-panel profile-modal" style={{ ...styles.modal, maxWidth: '400px' }}>
+          <div className="glass-panel" style={{ ...styles.modal, maxWidth: '400px' }}>
             <div style={styles.modalHeader}>
               <h3>Edit Profile</h3>
               <button onClick={() => setShowProfileModal(false)} style={styles.modalClose}><X size={18} /></button>
@@ -1272,11 +1111,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                 alt=""
                 className="avatar lg"
               />
-              <label className="profile-image-button">
-                {profileUploading ? 'Uploading...' : 'Choose profile picture'}
-                <input type="file" accept="image/*" onChange={handleProfileImageChange} disabled={profileUploading} />
-              </label>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-dark)' }}>Choose an image or paste a URL below</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-dark)' }}>Avatar updates via URL below</span>
             </div>
 
             <div style={styles.modalForm}>
@@ -1446,7 +1281,7 @@ const styles = {
     transition: 'var(--transition-fast)',
   },
   userInfo: { display: 'flex', flexDirection: 'column' },
-  userUsername: { fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' },
+  userUsername: { fontSize: '0.85rem', fontWeight: 600, color: '#fff' },
   userEmail: { fontSize: '0.68rem', color: 'var(--color-primary-light)' },
   logoutButton: {
     color: 'var(--text-dark)',
