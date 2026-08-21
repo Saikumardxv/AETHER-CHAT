@@ -1,6 +1,7 @@
 {
   "name": "chat-platform-root",
   "version": "1.0.0",
+  "type": "module",
   "description": "Real-Time Chat & Collaboration Platform",
   "scripts": {
     "install:server": "cd server && npm install",

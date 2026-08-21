@@ -66,16 +66,14 @@ const io = new Server(server, {
 // Initialize Sockets logic
 initSocket(io);
 
-// Server startup
-const PORT = process.env.PORT || 5000;
-
-const startServer = async () => {
-  // Connect database first
-  await connectDB();
-  
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Local server startup. Vercel imports `app` as a serverless function instead.
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
+  connectDB().then(() => {
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   });
-};
+}
 
-startServer();
+export { app };
