@@ -1,0 +1,118 @@
+# Real-Time Chat & Collaboration Platform Implementation Plan
+
+Build a simplified Slack/Discord chat and collaboration platform featuring a modern glassmorphic UI, support for direct and channel-based messaging, typing indicators, read receipts, online/offline presence tracking, file sharing, message search, and unread notifications.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Database Solution**: To ensure the application runs seamlessly out-of-the-box without requiring a pre-installed MongoDB database, we will use `mongodb-memory-server` as a fallback. If a `MONGODB_URI` environment variable is provided, the backend will connect to it; otherwise, it will spin up an in-memory MongoDB instance automatically.
+> **Design Theme**: The platform will feature a high-fidelity dark glassmorphism theme (`glassmorphic-dark`) utilizing modern indigo/violet gradients, backdrop blurs, and micro-interactions.
+
+## Proposed Changes
+
+We will create a monorepo structure in the workspace:
+- **`server/`**: Express, Socket.IO, mongoose, jwt, multer.
+- **`client/`**: React, Vite, CSS variables for styling, Socket.IO client, lucide-react.
+- **Root**: `package.json` orchestrator using `concurrently`.
+
+---
+
+### Root Configuration
+
+#### [NEW] [package.json](file:///d:/project-3/package.json)
+Orchestrates scripts to install dependencies and run both frontend and backend concurrently.
+
+---
+
+### Backend Service (`server/`)
+
+We will create a Node/Express backend that handles HTTP requests and Socket.IO real-time connections.
+
+#### [NEW] [package.json](file:///d:/project-3/server/package.json)
+Backend dependencies: `express`, `mongoose`, `socket.io`, `jsonwebtoken`, `bcryptjs`, `cors`, `multer`, `dotenv`, and `mongodb-memory-server`.
+
+#### [NEW] [server.js](file:///d:/project-3/server/server.js)
+The main entry point. Sets up express, server routing, Socket.IO initialization, static asset serving, and handles startup.
+
+#### [NEW] [db.js](file:///d:/project-3/server/config/db.js)
+Establishes mongoose connection. If no `MONGODB_URI` is specified in `.env`, spins up `mongodb-memory-server` and connects to it.
+
+#### [NEW] [User.js](file:///d:/project-3/server/models/User.js)
+Mongoose model for users: `username`, `email`, `passwordHash`, `avatarUrl`, `status` ('online' or 'offline'), and `lastSeen`.
+
+#### [NEW] [Channel.js](file:///d:/project-3/server/models/Channel.js)
+Mongoose model for chat channels/groups: `name` (for group/channel), `isGroup` (true for channels, false for direct messages), `members` (list of User IDs), and `createdBy`.
+
+#### [NEW] [Message.js](file:///d:/project-3/server/models/Message.js)
+Mongoose model for messages: `sender` (User ID), `channel` (Channel ID), `content` (text content), `fileUrl`, `fileName`, `fileType`, and `readBy` (array of objects storing user reference and read timestamp).
+
+#### [NEW] [auth.js](file:///d:/project-3/server/middleware/auth.js)
+Authentication middleware to extract and verify JWT tokens from requests.
+
+#### [NEW] [auth.js](file:///d:/project-3/server/routes/auth.js)
+Routes for `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, and `/api/auth/users` (to list users to DM).
+
+#### [NEW] [channels.js](file:///d:/project-3/server/routes/channels.js)
+Routes for `/api/channels` (get all user's channels, create a channel).
+
+#### [NEW] [messages.js](file:///d:/project-3/server/routes/messages.js)
+Routes for `/api/messages/:channelId` (retrieve history) and `/api/messages/:channelId/search` (search chat content).
+
+#### [NEW] [upload.js](file:///d:/project-3/server/routes/upload.js)
+Handles files uploaded using `multer`, saving files to `/server/uploads/` and returning URLs.
+
+#### [NEW] [socket.js](file:///d:/project-3/server/sockets/socket.js)
+Manages Socket.IO events:
+- Authentication & association of sockets with user IDs.
+- Connection/disconnection presence events (`status: online/offline`).
+- Room joining (separate rooms for channels/DMs).
+- Messaging events, typing notifications (`typing`, `stop_typing`).
+- Read receipt updates.
+
+---
+
+### Frontend Client (`client/`)
+
+A high-performance React application styled with premium dark glassmorphism.
+
+#### [NEW] [package.json](file:///d:/project-3/client/package.json)
+Vite and React setup. Dependencies: `react`, `react-dom`, `lucide-react`, `socket.io-client`, `axios`.
+
+#### [NEW] [vite.config.js](file:///d:/project-3/client/vite.config.js)
+Vite configuration with api proxy to backend (`http://localhost:5000`).
+
+#### [NEW] [index.html](file:///d:/project-3/client/index.html)
+Main HTML page using modern fonts (Inter & Outfit).
+
+#### [NEW] [index.css](file:///d:/project-3/client/src/index.css)
+Global styling definition. Establishes the styling system: glassmorphic styles, custom dark variables, scrollbar custom stylings, scroll-to-bottom behavior, and animations.
+
+#### [NEW] [App.jsx](file:///d:/project-3/client/src/App.jsx)
+Core React state container. Handles routing between Authentication (Login/Register) and the Chat Dashboard. Maintains active user state.
+
+#### [NEW] [Auth.jsx](file:///d:/project-3/client/src/components/Auth.jsx)
+Login and register UI forms with custom glass inputs and neon button actions.
+
+#### [NEW] [Dashboard.jsx](file:///d:/project-3/client/src/components/Dashboard.jsx)
+Main interface:
+- **Sidebar**: Profile indicator with online status dropdown, Channels list with a "Create Channel" modal trigger, and Users list (Direct Messages) with online/offline indicators.
+- **Chat Window**: Main area listing messages, scrolling automatically, rendering attachments, typing indicators, read receipts, and message details.
+- **Details Sidebar**: Toggleable dashboard panel showing channel/member info, search capabilities, and shared file list.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- We will run a script to start the servers and verify that backend sockets and endpoints respond correctly.
+
+### Manual Verification
+- Launch the application: `npm run dev`.
+- Register two users (`Alice` and `Bob`) in two browser sessions.
+- Verify user presence syncing (Alice sees Bob online, and vice-versa).
+- Open direct message chat. Type a message; verify that typing indicators trigger in real time.
+- Send a message; check if it displays on both sides instantly. Check read receipts (changes from Sent to Read when open).
+- Upload and share a file (image, PDF, text). Confirm that it downloads/opens correctly.
+- Test creating a Channel (group chat), adding users, and sending messages.
+- Test message search box (searches messages within active channel).
+- Check in-app notification indicators when Bob sends a message to Alice while Alice is looking at another channel.
