@@ -50,16 +50,16 @@ const App = () => {
 
     // Connect to WebSocket server directly
     // Using environment port or local dev server address (5000)
-    const backendUrl = import.meta.env.VITE_API_URL || (
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || (
       window.location.hostname === 'localhost'
         ? 'http://localhost:5000'
-        : `${window.location.protocol}//${window.location.hostname}:5000`
+        : window.location.origin
     );
 
-    console.log(`Connecting socket to: ${backendUrl}`);
+    console.log(`Connecting socket to: ${socketUrl}`);
     const token = localStorage.getItem('token');
     
-    const newSocket = io(backendUrl, {
+    const newSocket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling']
     });

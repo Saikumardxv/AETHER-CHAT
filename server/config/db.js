@@ -286,7 +286,7 @@ const createMockModel = (modelName, schema) => {
 
 // Database connection startup
 export const connectDB = async () => {
-  if (process.env.USE_MOCK === 'true') {
+  if (process.env.USE_MOCK === 'true' || (process.env.VERCEL && !process.env.MONGODB_URI)) {
     console.log('========================================================================');
     console.log(' [DIRECT] ACTIVATING HIGH-FIDELITY IN-MEMORY MOCK DATABASE ADAPTER ');
     console.log('========================================================================');
