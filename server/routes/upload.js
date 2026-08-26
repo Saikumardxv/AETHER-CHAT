@@ -7,7 +7,9 @@ import { protect } from '../middleware/auth.js';
 const router = express.Router();
 
 // Ensure upload directory exists
-const uploadDir = 'uploads/';
+const uploadDir = process.env.VERCEL
+  ? path.join('/tmp', 'aetherchat-uploads')
+  : path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }

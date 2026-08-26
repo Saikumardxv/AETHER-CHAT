@@ -603,16 +603,27 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setAvatarUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
     try {
-      const response = await axios.post('/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+      const imageUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const image = new Image();
+          image.onload = () => {
+            const maxSize = 256;
+            const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          };
+          image.onerror = reject;
+          image.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
-      setProfileAvatar(response.data.fileUrl);
+      setProfileAvatar(imageUrl);
     } catch (error) {
       console.error('Avatar upload failed:', error);
       alert('Could not upload profile picture. Please try another image.');

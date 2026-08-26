@@ -109,6 +109,11 @@ body {
   color: var(--text-main);
 }
 
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+
 .auth-screen {
   isolation: isolate;
   transition: background-color 0.35s ease, color 0.35s ease;
