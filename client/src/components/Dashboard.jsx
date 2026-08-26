@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   Hash, Plus, MessageSquare, Send, Paperclip, Search, 
   Info, LogOut, X, FileText, Download, Check, CheckCheck, 
-  Smile, Pencil, Trash2, CornerUpLeft, Sun, Moon, UserRound
+  Smile, Pencil, Trash2, CornerUpLeft, Sun, Moon, UserRound, Share2
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
@@ -38,6 +38,8 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   // ── UI ────────────────────────────────────────────────────────────────
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDMModal, setShowDMModal] = useState(false);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
@@ -329,6 +331,31 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     } catch (err) { console.error('[DM] Direct conversation failed:', err.response?.data?.message || err.message); }
   };
 
+  const handleForwardMessage = async (recipientId) => {
+    if (!forwardingMessage || !socket) return;
+    try {
+      const res = await axios.post('/api/channels/dm', { userId: recipientId }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const channel = res.data;
+      if (!channels.some(c => c._id === channel._id)) {
+        setChannels(prev => [channel, ...prev]);
+      }
+      socket.emit('send_message', {
+        channelId: channel._id,
+        content: forwardingMessage.content || '',
+        fileUrl: forwardingMessage.fileUrl || '',
+        fileName: forwardingMessage.fileName || '',
+        fileType: forwardingMessage.fileType || '',
+      });
+      setShowForwardModal(false);
+      setForwardingMessage(null);
+      setActionMessageId(null);
+    } catch (err) {
+      console.error('[DM] Message forwarding failed:', err.response?.data?.message || err.message);
+    }
+  };
+
   // ── Typing ────────────────────────────────────────────────────────────
   const handleMessageChange = (e) => {
     setMessageText(e.target.value);
@@ -454,6 +481,15 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       return String(reactionUser._id || reactionUser.id || '');
     }
     return String(reactionUser);
+  };
+
+  const getReactionUserProfile = (reactionUser) => {
+    const reactionId = reactionUserId(reactionUser);
+    if (typeof reactionUser === 'object' && (reactionUser.avatarUrl || reactionUser.username)) {
+      return reactionUser;
+    }
+    return allUsers.find(directoryUser => String(directoryUser._id) === reactionId)
+      || (String(user._id) === reactionId ? user : reactionUser);
   };
 
   // Quick-react picker (floating minimal set)
@@ -848,6 +884,19 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                             })()
                           ))}
                           <span className="msg-action-divider" />
+                          <button
+                            className="msg-action-btn"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setForwardingMessage(msg);
+                              setShowForwardModal(true);
+                              setActionMessageId(null);
+                            }}
+                            title="Share message"
+                            aria-label="Share message"
+                          >
+                            <Share2 size={14} />
+                          </button>
                           {isMe ? (
                             <>
                               <button
@@ -999,14 +1048,19 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                 {selectedReaction?.messageId === msg._id && selectedReaction.emoji === reaction.emoji && (
                                   <div className="reaction-user-list">
                                     {(Array.isArray(reaction.users) ? reaction.users : []).map(reactionUser => (
-                                      <div key={reactionUserId(reactionUser)} className="reaction-user-item">
-                                        <img
-                                          src={reactionUser.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${reactionUser.username || reactionUserId(reactionUser)}`}
-                                          alt=""
-                                          className="avatar xs"
-                                        />
-                                        <span>{reactionUser.username || 'User'}</span>
-                                      </div>
+                                      (() => {
+                                        const reactionProfile = getReactionUserProfile(reactionUser);
+                                        return (
+                                          <div key={reactionUserId(reactionUser)} className="reaction-user-item">
+                                            <img
+                                              src={reactionProfile?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${reactionProfile?.username || reactionUserId(reactionUser)}`}
+                                              alt=""
+                                              className="avatar xs"
+                                            />
+                                            <span>{reactionProfile?.username || 'User'}</span>
+                                          </div>
+                                        );
+                                      })()
                                     ))}
                                   </div>
                                 )}
@@ -1313,6 +1367,58 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                     </button>
                   );
                 })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Modal: Share Message ══════════════════════════════════════════ */}
+      {showForwardModal && forwardingMessage && (
+        <div style={styles.modalOverlay}>
+          <div className="glass-panel" style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3>Share Message</h3>
+              <button
+                onClick={() => { setShowForwardModal(false); setForwardingMessage(null); }}
+                style={styles.modalClose}
+                aria-label="Close share message dialog"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div style={styles.usersListModal}>
+              {allUsers.filter(recipient => String(recipient._id) !== String(user._id)).length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>
+                  No other active users on the grid
+                </div>
+              ) : (
+                allUsers
+                  .filter(recipient => String(recipient._id) !== String(user._id))
+                  .map(recipient => (
+                    <button
+                      key={recipient._id}
+                      onClick={() => handleForwardMessage(recipient._id)}
+                      style={styles.userDMRow}
+                      className="glass-card"
+                    >
+                      <div className="avatar-wrapper">
+                        <img
+                          src={recipient.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${recipient.username}`}
+                          alt=""
+                          className="avatar"
+                        />
+                        <div className={`status-indicator ${isUserOnline(recipient._id) ? 'online' : 'offline'}`} style={styles.statusInList}></div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{recipient.username}</div>
+                        <div style={{ fontSize: '0.75rem', color: isUserOnline(recipient._id) ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                          {isUserOnline(recipient._id) ? '● online' : '○ offline'}
+                        </div>
+                      </div>
+                      <Share2 size={16} style={{ marginLeft: 'auto', color: 'var(--text-dark)' }} />
+                    </button>
+                  ))
               )}
             </div>
           </div>
