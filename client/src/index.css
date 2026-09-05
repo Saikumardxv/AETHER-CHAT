@@ -1219,6 +1219,15 @@ button:active {
     transform: translateX(0);
   }
 
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    background: rgba(10, 12, 16, 0.46);
+    cursor: pointer;
+  }
+
   .app-container.mobile-nav-open .sidebar .brandContainer > div:last-child,
   .app-container.mobile-nav-open .sidebar .sectionTitleRow > span,
   .app-container.mobile-nav-open .sidebar .channelName,

@@ -71,6 +71,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const longPressTimerRef = useRef(null);
+  const mobileTouchStartRef = useRef(null);
 
   // ── Initial data fetch ────────────────────────────────────────────────
   useEffect(() => {
@@ -577,6 +578,28 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     }
   };
 
+  const handleMobileTouchStart = (event) => {
+    const touch = event.touches[0];
+    mobileTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleMobileTouchEnd = (event) => {
+    const start = mobileTouchStartRef.current;
+    mobileTouchStartRef.current = null;
+    if (!start || window.innerWidth > 767) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = Math.abs(touch.clientY - start.y);
+    if (deltaY > 80 || Math.abs(deltaX) < 70) return;
+
+    if (!showMobileNav && start.x <= 28 && deltaX > 0) {
+      setShowMobileNav(true);
+    } else if (showMobileNav && deltaX < 0) {
+      setShowMobileNav(false);
+    }
+  };
+
   // ── Search ────────────────────────────────────────────────────────────
   const handleMessageSearch = async (e) => {
     e.preventDefault();
@@ -697,7 +720,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className={`app-container ${showDetails ? 'with-drawer' : ''} ${showMobileNav ? 'mobile-nav-open' : ''}`}>
+    <div
+      className={`app-container ${showDetails ? 'with-drawer' : ''} ${showMobileNav ? 'mobile-nav-open' : ''}`}
+      onTouchStart={handleMobileTouchStart}
+      onTouchEnd={handleMobileTouchEnd}
+    >
 
       {/* ══ Sidebar ══════════════════════════════════════════════════════ */}
       <div className="sidebar" style={styles.sidebar}>
@@ -813,6 +840,15 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
           </button>
         </div>
       </div>
+
+      {showMobileNav && (
+        <button
+          type="button"
+          className="mobile-nav-backdrop"
+          onClick={() => setShowMobileNav(false)}
+          aria-label="Close navigation"
+        />
+      )}
 
       {/* ══ Main Chat Area ════════════════════════════════════════════════ */}
       <div className="chat-area" style={styles.chatArea}>

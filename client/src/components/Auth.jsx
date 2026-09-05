@@ -22,8 +22,8 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const payload = isLogin 
-        ? { email, password } 
-        : { username, email, password };
+        ? { email: email.trim(), password }
+        : { username: username.trim(), email: email.trim(), password };
 
       const response = await axios.post(endpoint, payload);
       console.log(`[AUTH] ${isLogin ? 'Login' : 'Registration'} request succeeded for ${response.data.username}`);
