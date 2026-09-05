@@ -220,4 +220,16 @@ router.put('/profile', protect, async (req, res) => {
   }
 });
 
+// @desc    Delete the current user and their account data
+// @route   DELETE /api/auth/profile
+// @access  Private
+router.delete('/profile', protect, async (req, res) => {
+  try {
+    await User.findByIdAndDelete(req.user._id);
+    res.json({ userId: req.user._id });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router;

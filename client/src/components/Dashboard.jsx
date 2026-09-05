@@ -45,6 +45,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
+  const [newChannelAvatar, setNewChannelAvatar] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
 
   // ── Profile editing ───────────────────────────────────────────────────
@@ -63,6 +64,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   const fileInputRef = useRef(null);
   const profileFileInputRef = useRef(null);
+  const channelFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
@@ -305,12 +307,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     try {
       const res = await axios.post('/api/channels', {
         name: newChannelName, description: newChannelDesc, members: selectedMembers
+          , avatarUrl: newChannelAvatar
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       setChannels(prev => [res.data, ...prev]);
       setActiveChannel(res.data);
       setShowCreateModal(false);
       setNewChannelName('');
       setNewChannelDesc('');
+      setNewChannelAvatar('');
       setSelectedMembers([]);
       if (socket) socket.emit('join_channel', res.data._id);
     } catch (err) { console.error('Create channel failed:', err); }
@@ -323,9 +327,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       const res = await axios.post('/api/channels/dm', { userId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      if (!channels.some(c => c._id === res.data._id)) {
-        setChannels(prev => [res.data, ...prev]);
-      }
+      setChannels(prev => [res.data, ...prev.filter(channel => channel._id !== res.data._id)]);
       setActiveChannel(res.data);
       console.log(`[DM] Direct conversation opened: channel ${res.data._id}`);
       setShowDMModal(false);
@@ -339,9 +341,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const channel = res.data;
-      if (!channels.some(c => c._id === channel._id)) {
-        setChannels(prev => [channel, ...prev]);
-      }
+      setChannels(prev => [channel, ...prev.filter(existing => existing._id !== channel._id)]);
       socket.emit('send_message', {
         channelId: channel._id,
         content: forwardingMessage.content || '',
@@ -645,6 +645,28 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     }
   };
 
+  const handleChannelAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setNewChannelAvatar(String(reader.result));
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!window.confirm('Delete your profile and account permanently?')) return;
+    try {
+      await axios.delete('/api/auth/profile', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      onLogout();
+    } catch (error) {
+      console.error('Delete profile failed:', error);
+      alert(error.response?.data?.message || 'Could not delete profile');
+    }
+  };
+
   // ── Helpers ───────────────────────────────────────────────────────────
   const toggleMemberSelection = (uid) => {
     setSelectedMembers(prev =>
@@ -656,6 +678,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     if (!channel || channel.isGroup) return null;
     return channel.members.find(m => String(m._id) !== String(user._id));
   };
+
+  const directMessageChannels = channels.filter(channel => !channel.isGroup).reduce((unique, channel) => {
+    const recipient = getDMRecipient(channel);
+    if (recipient && !unique.some(existing => getDMRecipient(existing)?._id === recipient._id)) {
+      unique.push(channel);
+    }
+    return unique;
+  }, []);
 
   const typingState = activeChannel ? typingUsers[activeChannel._id] || {} : {};
   const typingNames = Object.values(typingState);
@@ -697,7 +727,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                 className="channelItem"
                 style={{ ...styles.channelItem, ...(activeChannel?._id === c._id ? styles.activeItem : {}) }}
               >
-                <Hash size={16} style={{ color: activeChannel?._id === c._id ? '#fff' : 'var(--text-dark)' }} />
+                {c.avatarUrl ? (
+                  <img src={c.avatarUrl} alt="" className="avatar xs" />
+                ) : (
+                  <Hash size={16} style={{ color: activeChannel?._id === c._id ? '#fff' : 'var(--text-dark)' }} />
+                )}
                 <span style={styles.channelName}>{c.name}</span>
                 {unreadCounts[c._id] > 0 && (
                   <span className="badge unread">{unreadCounts[c._id]}</span>
@@ -716,7 +750,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             </button>
           </div>
           <div className="listContainer" style={styles.listContainer}>
-            {channels.filter(c => !c.isGroup).map(c => {
+            {directMessageChannels.map(c => {
               const recipient = getDMRecipient(c);
               if (!recipient) return null;
               const isOnline = onlineUserIds.has(String(recipient._id));
@@ -765,6 +799,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
               <div style={styles.userEmail}>{currentUserOnline ? 'Online now' : 'Offline'}</div>
             </div>
           </button>
+          <button
+            onClick={handleDeleteProfile}
+            style={styles.logoutButton}
+            title="Delete profile"
+            aria-label="Delete profile"
+          >
+            <Trash2 size={18} />
+          </button>
           <button onClick={onLogout} style={styles.logoutButton} title="Logout">
             <LogOut size={18} />
           </button>
@@ -780,7 +822,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
               <div style={styles.headerInfo}>
                 <h2 style={styles.headerTitle}>
                   {activeChannel.isGroup ? (
-                    <><Hash size={20} style={styles.headerHash} /><span>{activeChannel.name}</span></>
+                    <>
+                      {activeChannel.avatarUrl ? (
+                        <img src={activeChannel.avatarUrl} alt="" className="avatar sm" />
+                      ) : (
+                        <Hash size={20} style={styles.headerHash} />
+                      )}
+                      <span>{activeChannel.name}</span>
+                    </>
                   ) : (
                     <span>{dmRecipient?.username}</span>
                   )}
@@ -1245,6 +1294,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             <div style={styles.drawerSection}>
               <h4 style={styles.sectionHeader}>About</h4>
               <div style={styles.aboutCard} className="glass-card">
+                {activeChannel.isGroup && activeChannel.avatarUrl && (
+                  <img
+                    src={activeChannel.avatarUrl}
+                    alt={`${activeChannel.name} channel profile`}
+                    className="avatar lg"
+                    style={{ marginBottom: 10 }}
+                  />
+                )}
                 <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>Name</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
                   {activeChannel.isGroup ? `# ${activeChannel.name}` : `DM session`}
@@ -1340,6 +1397,24 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                   onChange={e => setNewChannelDesc(e.target.value)}
                   style={{ ...styles.modalInput, height: 80, resize: 'none' }}
                 />
+              </div>
+              <div style={styles.modalGroup}>
+                <label style={styles.modalLabel}>Channel picture</label>
+                <input
+                  ref={channelFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChannelAvatarChange}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="profile-avatar-edit-button"
+                  onClick={() => channelFileInputRef.current?.click()}
+                >
+                  {newChannelAvatar ? 'Change channel picture' : 'Select channel picture'}
+                </button>
+                {newChannelAvatar && <img src={newChannelAvatar} alt="Channel preview" className="avatar lg" />}
               </div>
               <div style={styles.modalGroup}>
                 <label style={styles.modalLabel}>Add Members</label>
@@ -1527,6 +1602,14 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                 disabled={profileSaving}
               >
                 {profileSaving ? 'Saving...' : 'Save Profile'}
+              </button>
+              <button
+                type="button"
+                className="msg-action-btn danger"
+                onClick={handleDeleteProfile}
+                style={{ alignSelf: 'flex-start', width: 'auto', padding: '8px 12px' }}
+              >
+                Delete Profile
               </button>
             </div>
           </div>

@@ -33,7 +33,7 @@ router.get('/', protect, async (req, res) => {
 // @route   POST /api/channels
 // @access  Private
 router.post('/', protect, async (req, res) => {
-  const { name, description, members } = req.body;
+  const { name, description, avatarUrl, members } = req.body;
   try {
     if (!name) {
       return res.status(400).json({ message: 'Channel name is required' });
@@ -44,6 +44,7 @@ router.post('/', protect, async (req, res) => {
     const channel = await Channel.create({
       name,
       description: description || '',
+      avatarUrl: avatarUrl || '',
       isGroup: true,
       members: Array.from(memberIds),
       createdBy: req.user._id,

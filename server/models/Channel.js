@@ -11,6 +11,10 @@ const channelSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  avatarUrl: {
+    type: String,
+    default: '',
+  },
   isGroup: {
     type: Boolean,
     default: true, // true: Channel/Group, false: 1-to-1 Direct Message (DM)
