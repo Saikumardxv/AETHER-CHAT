@@ -315,9 +315,10 @@ button:active {
 /* Main Layout Grid */
 .app-container {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   height: 100vh;
   width: 100vw;
+  min-width: 0;
   background: var(--bg-main);
   gap: 1px;
 }
@@ -1189,26 +1190,33 @@ button:active {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   body {
     overflow: hidden;
   }
 
   .app-container,
   .app-container.with-drawer {
-    grid-template-columns: 68px minmax(0, 1fr);
+    display: block;
+    position: relative;
+    width: 100%;
+    min-width: 0;
   }
 
   .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(290px, 82vw);
+    min-width: 0;
+    transform: translateX(-105%);
+    z-index: 40;
     transition: transform 0.2s ease;
     touch-action: pan-y;
+    box-shadow: 12px 0 28px rgba(23, 23, 23, 0.16);
   }
 
   .app-container.mobile-nav-open .sidebar {
     transform: translateX(0);
-    width: min(290px, 82vw);
-    z-index: 40;
-    box-shadow: 12px 0 28px rgba(23, 23, 23, 0.16);
   }
 
   .app-container.mobile-nav-open .sidebar .brandContainer > div:last-child,
@@ -1229,16 +1237,12 @@ button:active {
     padding: 9px 12px !important;
   }
 
-  .sidebar {
-    min-width: 0;
-  }
-
   .sidebarHeader {
-    padding: 14px 8px !important;
+    padding: 18px 16px !important;
   }
 
   .sidebar .brandContainer {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .sidebar .brandContainer > div:last-child,
@@ -1247,26 +1251,32 @@ button:active {
   .sidebar .person-list-info,
   .sidebar .userInfo,
   .sidebar .logoutButton {
-    display: none;
+    display: block;
   }
 
   .sidebarSection {
-    padding: 14px 6px !important;
+    padding: 16px 10px !important;
   }
 
   .sidebar .sectionTitleRow {
-    justify-content: center;
-    padding: 0 0 8px !important;
+    justify-content: space-between;
+    padding: 0 10px 8px !important;
   }
 
   .sidebar .channelItem {
-    justify-content: center;
-    padding: 9px 6px !important;
+    justify-content: flex-start;
+    padding: 10px 12px !important;
   }
 
   .sidebarFooter {
-    justify-content: center !important;
-    padding: 12px 6px !important;
+    justify-content: space-between !important;
+    padding: 14px 16px !important;
+  }
+
+  .chat-area {
+    width: 100%;
+    min-width: 0;
+    height: 100dvh !important;
   }
 
   .chatHeader {
@@ -1301,7 +1311,8 @@ button:active {
   }
 
   .messageStream {
-    padding: 14px !important;
+    padding: 14px 12px !important;
+    min-width: 0;
   }
 
   .message-row-wrapper {
@@ -1345,7 +1356,7 @@ button:active {
   }
 
   .input-area {
-    padding: 0 10px 10px !important;
+    padding: 0 10px max(10px, env(safe-area-inset-bottom)) !important;
   }
 
   .inputForm {
@@ -1396,5 +1407,61 @@ button:active {
   .toast {
     min-width: 0;
     max-width: none;
+  }
+
+  .details-drawer {
+    inset: 0 0 0 auto !important;
+    height: 100dvh !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .theme-toggle {
+    top: 14px;
+    right: 14px;
+  }
+
+  .auth-screen {
+    align-items: flex-start !important;
+    padding: 72px 12px 24px !important;
+    overflow-y: auto !important;
+  }
+
+  .auth-screen .glass-panel {
+    max-width: 100%;
+    padding: 28px 20px !important;
+  }
+
+  .auth-screen h1 {
+    font-size: 2rem !important;
+  }
+
+  .chatHeader {
+    padding: 10px 12px !important;
+  }
+
+  .headerActions {
+    gap: 2px !important;
+  }
+
+  .headerActions > button {
+    flex: 0 0 30px;
+  }
+
+  .headerDesc {
+    max-width: 44vw;
+  }
+
+  .message-row-wrapper {
+    gap: 6px !important;
+  }
+
+  .inputForm {
+    gap: 2px !important;
+  }
+
+  .inputForm .chatInput {
+    min-width: 0;
+    font-size: 0.85rem;
   }
 }

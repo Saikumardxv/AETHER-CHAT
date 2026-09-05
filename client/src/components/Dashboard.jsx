@@ -43,6 +43,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [newChannelAvatar, setNewChannelAvatar] = useState('');
@@ -696,7 +697,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className={`app-container ${showDetails ? 'with-drawer' : ''}`}>
+    <div className={`app-container ${showDetails ? 'with-drawer' : ''} ${showMobileNav ? 'mobile-nav-open' : ''}`}>
 
       {/* ══ Sidebar ══════════════════════════════════════════════════════ */}
       <div className="sidebar" style={styles.sidebar}>
@@ -723,7 +724,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             {channels.filter(c => c.isGroup).map(c => (
               <button
                 key={c._id}
-                onClick={() => setActiveChannel(c)}
+                onClick={() => { setActiveChannel(c); setShowMobileNav(false); }}
                 className="channelItem"
                 style={{ ...styles.channelItem, ...(activeChannel?._id === c._id ? styles.activeItem : {}) }}
               >
@@ -757,7 +758,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
               return (
                 <button
                   key={c._id}
-                  onClick={() => setActiveChannel(c)}
+                  onClick={() => { setActiveChannel(c); setShowMobileNav(false); }}
                   className="channelItem"
                   style={{ ...styles.channelItem, ...(activeChannel?._id === c._id ? styles.activeItem : {}) }}
                 >
@@ -821,6 +822,15 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             <div className="chatHeader" style={styles.chatHeader}>
               <div style={styles.headerInfo}>
                 <h2 style={styles.headerTitle}>
+                  <button
+                    type="button"
+                    className="mobile-menu-button"
+                    onClick={() => setShowMobileNav(current => !current)}
+                    aria-label={showMobileNav ? 'Close navigation' : 'Open navigation'}
+                    title={showMobileNav ? 'Close navigation' : 'Open navigation'}
+                  >
+                    <MessageSquare size={17} />
+                  </button>
                   {activeChannel.isGroup ? (
                     <>
                       {activeChannel.avatarUrl ? (
