@@ -14,17 +14,17 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Retain original name, append timestamp to prevent name collisions
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
+const storage = process.env.VERCEL
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  });
 
 const upload = multer({
   storage: storage,
@@ -40,8 +40,9 @@ router.post('/', protect, upload.single('file'), (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Return the relative URL from the server root
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const fileUrl = process.env.VERCEL
+      ? `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`
+      : `/uploads/${req.file.filename}`;
 
     res.status(201).json({
       fileUrl,

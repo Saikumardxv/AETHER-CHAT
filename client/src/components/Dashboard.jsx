@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   Hash, Plus, MessageSquare, Send, Paperclip, Search, 
   Info, LogOut, X, FileText, Download, Check, CheckCheck, 
-  Smile, Pencil, Trash2, CornerUpLeft, Sun, Moon, UserRound, Share2
+  Smile, SmilePlus, Pencil, Trash2, CornerUpLeft, Sun, Moon, UserRound, Share2
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
@@ -33,6 +33,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   // ── Emoji picker ──────────────────────────────────────────────────────
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState(null);
   const [actionMessageId, setActionMessageId] = useState(null);
 
   // ── UI ────────────────────────────────────────────────────────────────
@@ -428,6 +429,21 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     inputRef.current?.focus();
   };
 
+  const handleReactionEmojiSelect = (emoji) => {
+    if (reactionPickerMessageId) {
+      handleReact(reactionPickerMessageId, emoji);
+    }
+    setReactionPickerMessageId(null);
+  };
+
+  const resolveMediaUrl = (url) => {
+    if (!url || url.startsWith('data:') || /^https?:\/\//i.test(url)) return url;
+    const apiOrigin = import.meta.env.VITE_API_URL || window.location.origin;
+    return `${apiOrigin}${url}`;
+  };
+
+  const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😁'];
+
   // ── React to Message ──────────────────────────────────────────────────
   const handleReact = (messageId, emoji) => {
     if (!socket || !socket.connected || !activeChannel) {
@@ -491,9 +507,6 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     return allUsers.find(directoryUser => String(directoryUser._id) === reactionId)
       || (String(user._id) === reactionId ? user : reactionUser);
   };
-
-  // Quick-react picker (floating minimal set)
-  const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '✅', '👏'];
 
   // ── Edit Message ──────────────────────────────────────────────────────
   const startEdit = (msg) => {
@@ -581,13 +594,12 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const handleProfileSave = async () => {
     setProfileSaving(true);
     try {
-      await axios.put('/api/auth/profile', {
+      const res = await axios.put('/api/auth/profile', {
         username: profileUsername,
         avatarUrl: profileAvatar,
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
-      // Update local user state in localStorage
-      const updatedUser = { ...user, username: profileUsername, avatarUrl: profileAvatar };
+      const updatedUser = res.data;
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setShowProfileModal(false);
       window.location.reload(); // Reload to reflect username changes
@@ -864,36 +876,50 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                       {/* Context action toolbar (appears on hover) */}
                       {!msg.isDeleted && (
                         <div className="msg-actions">
-                          {QUICK_EMOJIS.map(emoji => (
-                            (() => {
-                              const reaction = (Array.isArray(msg.reactions) ? msg.reactions : []).find(item => item.emoji === emoji);
-                              const users = Array.isArray(reaction?.users) ? reaction.users : [];
-                              const reactedByMe = users.some(reactionUser => reactionUserId(reactionUser) === String(user._id));
-                              return (
-                                <button
-                                  key={emoji}
-                                  className={`msg-action-btn emoji-action-btn ${reactedByMe ? 'active-reaction' : ''}`}
-                                  type="button"
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onPointerUp={(event) => event.stopPropagation()}
-                                  onTouchStart={(event) => event.stopPropagation()}
-                                  onTouchEnd={(event) => event.stopPropagation()}
-                                  onMouseDown={(event) => event.stopPropagation()}
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    console.log(`[REACTION] ${reactedByMe ? 'Removing' : 'Adding'} ${emoji} on message ${msg._id}`);
-                                    handleReact(msg._id, emoji);
-                                    setSelectedReaction({ messageId: msg._id, emoji });
-                                  }}
-                                  title={`${reactedByMe ? 'Remove' : 'Add'} ${emoji} reaction${users.length ? ` (${users.length})` : ''}`}
-                                >
-                                  <span>{emoji}</span>
-                                  {users.length > 0 && <span className="reaction-count">{users.length}</span>}
-                                </button>
-                              );
-                            })()
-                          ))}
+                          {QUICK_EMOJIS.map(emoji => {
+                            const reaction = (Array.isArray(msg.reactions) ? msg.reactions : [])
+                              .find(item => item.emoji === emoji);
+                            const users = Array.isArray(reaction?.users) ? reaction.users : [];
+                            const reactedByMe = users.some(reactionUser => reactionUserId(reactionUser) === String(user._id));
+                            return (
+                              <button
+                                key={emoji}
+                                className={`msg-action-btn emoji-action-btn ${reactedByMe ? 'active-reaction' : ''}`}
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  handleReact(msg._id, emoji);
+                                  setSelectedReaction({ messageId: msg._id, emoji });
+                                }}
+                                title={`${reactedByMe ? 'Remove' : 'Add'} ${emoji} reaction`}
+                              >
+                                <span>{emoji}</span>
+                                {users.length > 0 && <span className="reaction-count">{users.length}</span>}
+                              </button>
+                            );
+                          })}
+                          <button
+                            className="msg-action-btn emoji-action-btn"
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setReactionPickerMessageId(current => current === msg._id ? null : msg._id);
+                            }}
+                            title="More reactions"
+                            aria-label="More reactions"
+                          >
+                            <Plus size={16} />
+                          </button>
+                          {reactionPickerMessageId === msg._id && (
+                            <div className="message-reaction-picker">
+                              <EmojiPicker
+                                onSelect={handleReactionEmojiSelect}
+                                onClose={() => setReactionPickerMessageId(null)}
+                              />
+                            </div>
+                          )}
                           <span className="msg-action-divider" />
                           <button
                             className="msg-action-btn"
@@ -1010,10 +1036,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                   {msg.fileType?.startsWith('image/') ? (
                                     <div style={styles.imageAttachment}>
                                       <img
-                                        src={msg.fileUrl}
+                                        src={resolveMediaUrl(msg.fileUrl)}
                                         alt={msg.fileName}
                                         style={styles.imagePreview}
-                                        onClick={() => window.open(msg.fileUrl)}
+                                        onClick={() => window.open(resolveMediaUrl(msg.fileUrl))}
                                       />
                                     </div>
                                   ) : (
@@ -1024,7 +1050,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                         <div style={styles.attachmentSize}>Document Attachment</div>
                                       </div>
                                       <a
-                                        href={msg.fileUrl}
+                                        href={resolveMediaUrl(msg.fileUrl)}
                                         download={msg.fileName}
                                         target="_blank"
                                         rel="noreferrer"
@@ -1269,7 +1295,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                   messages.filter(m => m.fileUrl && !m.isDeleted).map(m => (
                     <a
                       key={m._id}
-                      href={m.fileUrl}
+                      href={resolveMediaUrl(m.fileUrl)}
                       target="_blank"
                       rel="noreferrer"
                       style={styles.fileLink}

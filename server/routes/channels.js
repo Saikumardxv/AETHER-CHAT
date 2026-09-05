@@ -92,14 +92,17 @@ router.post('/dm', protect, async (req, res) => {
   }
 });
 
-// @desc    Delete a direct chat for the current user
+// @desc    Delete a chat or a group owned by the current user
 // @route   DELETE /api/channels/:channelId
 // @access  Private (channel member)
 router.delete('/:channelId', protect, async (req, res) => {
   try {
     const channel = await Channel.findById(req.params.channelId);
     if (!channel) return res.status(404).json({ message: 'Chat not found' });
-    if (!channel.members.map(member => member.toString()).includes(req.user._id.toString())) {
+    const userId = req.user._id.toString();
+    const isMember = channel.members.some(member => member.toString() === userId);
+    const isGroupCreator = channel.isGroup && channel.createdBy?.toString() === userId;
+    if (!isMember && !isGroupCreator) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 

@@ -63,7 +63,7 @@ router.post('/register', async (req, res) => {
       password: await bcrypt.hash(password, 10),
       avatarUrl: randomAvatar,
       status: 'offline',
-      isEmailVerified: false,
+      isEmailVerified: true,
       emailVerificationCode,
     });
 
@@ -134,9 +134,6 @@ router.post('/login', async (req, res) => {
     });
 
     if (user && (await user.matchPassword(password))) {
-      if (user.isEmailVerified === false) {
-        return res.status(403).json({ message: 'Please verify your email before signing in' });
-      }
       console.log(`[AUTH] Login successful: ${user.username} (${user._id})`);
       res.json({
         _id: user._id,

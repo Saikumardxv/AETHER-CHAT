@@ -119,7 +119,7 @@ const Auth = ({ onAuthSuccess, theme, onToggleTheme }) => {
           <>
         <div style={styles.header}>
           <h1 style={styles.title}>
-            AETHER<span style={styles.accent}>CHAT</span>
+            <span style={styles.titleAether}>AETHER</span><span style={styles.accent}>CHAT</span>
           </h1>
           <p style={styles.subtitle}>
             {isLogin 
@@ -293,15 +293,26 @@ const styles = {
     fontFamily: "'Outfit', sans-serif",
     fontSize: '2.5rem',
     fontWeight: 800,
-    letterSpacing: '2px',
+    letterSpacing: '3px',
     color: 'var(--text-main)',
     textShadow: 'none',
     animation: 'brandReveal 0.9s ease-out both, brandGlow 4s ease-in-out 1s infinite',
+    lineHeight: 1.1,
   },
-  accent: {
-    background: 'linear-gradient(135deg, #171717 0%, #686868 100%)',
+  titleAether: {
+    background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 45%, #22d3ee 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+    filter: 'drop-shadow(0 0 18px rgba(168,85,247,0.45))',
+  },
+  accent: {
+    background: 'linear-gradient(135deg, #f97316 0%, #fbbf24 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+    filter: 'drop-shadow(0 0 14px rgba(249,115,22,0.5))',
+    marginLeft: '3px',
   },
   subtitle: {
     color: 'var(--text-muted)',

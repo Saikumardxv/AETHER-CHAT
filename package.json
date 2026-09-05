@@ -7,7 +7,7 @@
     "install:server": "cd server && npm install",
     "install:client": "cd client && npm install",
     "install-all": "npm install && npm run install:server && npm run install:client",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "node ./node_modules/concurrently/dist/bin/concurrently.js \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev"
   },

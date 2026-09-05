@@ -62,7 +62,8 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  maxHttpBufferSize: 15 * 1024 * 1024
 });
 
 // Initialize Sockets logic
