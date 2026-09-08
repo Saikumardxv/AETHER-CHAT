@@ -82,6 +82,19 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const heartbeat = () => {
+      axios.put('/api/auth/profile', { status: 'online' }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      }).catch(error => console.warn('[AUTH] Presence heartbeat failed:', error.message));
+      fetchChannels();
+      fetchUsers();
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── Socket events ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
@@ -412,15 +425,17 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       const res = await axios.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      if (socket && activeChannel) {
-        socket.emit('send_message', {
-          channelId: activeChannel._id,
+      if (activeChannel) {
+        const messageResponse = await axios.post(`/api/messages/${activeChannel._id}`, {
           content: messageText || '',
           fileUrl: res.data.fileUrl,
           fileName: res.data.fileName,
           fileType: res.data.fileType,
           replyTo: replyingTo?._id || null,
+        }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
+        setMessages(prev => [...prev, messageResponse.data]);
         setMessageText('');
         setSelectedFile(null);
         setReplyingTo(null);

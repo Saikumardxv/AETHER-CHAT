@@ -14,6 +14,47 @@ const populateMessage = (query) =>
     .populate('replyTo', 'content sender fileUrl fileName fileType isDeleted')
     .populate({ path: 'replyTo', populate: { path: 'sender', select: 'username avatarUrl' } });
 
+// @desc    Create a message through HTTP (used for reliable file delivery)
+// @route   POST /api/messages/:channelId
+// @access  Private
+router.post('/:channelId', protect, async (req, res) => {
+  try {
+    const { content, fileUrl, fileName, fileType, replyTo } = req.body;
+    const channel = await Channel.findById(req.params.channelId);
+    if (!channel || !channel.members.map(member => member.toString()).includes(req.user._id.toString())) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    let validReplyTo = null;
+    if (replyTo) {
+      const parentMessage = await Message.findOne({
+        _id: replyTo,
+        channel: channel._id,
+        isDeleted: false,
+      }).select('_id');
+      validReplyTo = parentMessage?._id || null;
+    }
+
+    const message = await Message.create({
+      sender: req.user._id,
+      channel: channel._id,
+      content: content || '',
+      fileUrl: fileUrl || '',
+      fileName: fileName || '',
+      fileType: fileType || '',
+      replyTo: validReplyTo,
+      readBy: [{ user: req.user._id, readAt: new Date() }],
+    });
+
+    channel.updatedAt = new Date();
+    await channel.save();
+    res.status(201).json(await populateMessage(Message.findById(message._id)));
+  } catch (error) {
+    console.error(`[DM] HTTP message creation failed for ${req.user.username}:`, error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @desc    Get all messages for a channel
 // @route   GET /api/messages/:channelId
 // @access  Private

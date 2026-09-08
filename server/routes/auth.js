@@ -192,6 +192,8 @@ router.put('/profile', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
+      user.lastSeen = new Date();
+      user.status = 'online';
       if (req.body.username) user.username = req.body.username;
       if (req.body.email) user.email = req.body.email;
       if (req.body.avatarUrl !== undefined) user.avatarUrl = req.body.avatarUrl;
