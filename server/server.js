@@ -32,7 +32,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 
 // Resolve static path for uploaded files
 const __filename = fileURLToPath(import.meta.url);

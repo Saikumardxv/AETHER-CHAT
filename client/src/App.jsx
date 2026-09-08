@@ -52,7 +52,7 @@ const App = () => {
     // Using environment port or local dev server address (5000)
     const socketUrl = import.meta.env.VITE_SOCKET_URL || (
       window.location.hostname === 'localhost'
-        ? 'http://localhost:5000'
+        ? 'http://127.0.0.1:5000'
         : window.location.origin
     );
 

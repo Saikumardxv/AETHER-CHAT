@@ -50,6 +50,13 @@ router.post('/', protect, async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await Message.create({
+      sender: req.user._id,
+      channel: channel._id,
+      content: `${req.user.username} added you to #${name.trim()}`,
+      readBy: [{ user: req.user._id, readAt: new Date() }],
+    });
+
     const populated = await populateChannel(Channel.findById(channel._id));
     res.status(201).json(populated);
   } catch (error) {

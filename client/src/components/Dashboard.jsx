@@ -48,6 +48,8 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [newChannelAvatar, setNewChannelAvatar] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  const [channelCreateError, setChannelCreateError] = useState('');
 
   // ── Profile editing ───────────────────────────────────────────────────
   const [profileUsername, setProfileUsername] = useState(user.username);
@@ -135,6 +137,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
     socket.on('channel_updated', () => { fetchChannels(); });
 
+    socket.on('added_to_channel', ({ channelId }) => {
+      fetchChannels();
+      setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
+    });
+
     socket.on('typing', ({ channelId, userId, username }) => {
       if (userId === user._id) return;
       setTypingUsers(prev => ({
@@ -200,6 +207,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       socket.off('user_status');
       socket.off('receive_message');
       socket.off('channel_updated');
+      socket.off('added_to_channel');
       socket.off('typing');
       socket.off('stop_typing');
       socket.off('message_read');
@@ -229,9 +237,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setChannels(res.data);
-      if (res.data.length > 0 && !activeChannel) {
-        setActiveChannel(res.data[0]);
-      }
+      setActiveChannel(prev => {
+        if (!prev) return res.data[0] || null;
+        return res.data.find(channel => channel._id === prev._id) || prev;
+      });
     } catch (err) { console.error('Fetch channels failed:', err); }
   };
 
@@ -305,21 +314,37 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   // ── Create Channel ────────────────────────────────────────────────────
   const handleCreateChannel = async (e) => {
     e.preventDefault();
-    if (!newChannelName.trim()) return;
+    if (!newChannelName.trim() || creatingChannel) return;
+    setCreatingChannel(true);
+    setChannelCreateError('');
     try {
       const res = await axios.post('/api/channels', {
-        name: newChannelName, description: newChannelDesc, members: selectedMembers
-          , avatarUrl: newChannelAvatar
+        name: newChannelName.trim(),
+        description: newChannelDesc.trim(),
+        members: selectedMembers,
+        avatarUrl: newChannelAvatar,
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      setChannels(prev => [res.data, ...prev]);
-      setActiveChannel(res.data);
+      const createdChannel = res.data;
+      setChannels(prev => [createdChannel, ...prev.filter(channel => channel._id !== createdChannel._id)]);
+      setActiveChannel(createdChannel);
       setShowCreateModal(false);
       setNewChannelName('');
       setNewChannelDesc('');
       setNewChannelAvatar('');
       setSelectedMembers([]);
-      if (socket) socket.emit('join_channel', res.data._id);
-    } catch (err) { console.error('Create channel failed:', err); }
+      if (socket) {
+        socket.emit('join_channel', createdChannel._id);
+        selectedMembers.forEach(memberId => {
+          socket.emit('member_added', { channelId: createdChannel._id, userId: memberId });
+        });
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || 'Channel could not be created. Check that the server is running.';
+      setChannelCreateError(message);
+      console.error('Create channel failed:', message);
+    } finally {
+      setCreatingChannel(false);
+    }
   };
 
   // ── Start DM ──────────────────────────────────────────────────────────
@@ -453,6 +478,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       return;
     }
 
+    setActionMessageId(null);
+    setReactionPickerMessageId(null);
+
     console.log(`[REACTION] Sending ${emoji} for message ${messageId}`);
 
     setMessages(prev => prev.map(msg => {
@@ -568,6 +596,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   };
 
   const startLongPress = (messageId) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    setActionMessageId(null);
     longPressTimerRef.current = setTimeout(() => setActionMessageId(messageId), 500);
   };
 
@@ -970,7 +1002,12 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                     >
                       {/* Context action toolbar (appears on hover) */}
                       {!msg.isDeleted && (
-                        <div className="msg-actions">
+                        <div
+                          className="msg-actions"
+                          onTouchStart={event => event.stopPropagation()}
+                          onTouchEnd={event => event.stopPropagation()}
+                          onTouchMove={event => event.stopPropagation()}
+                        >
                           {QUICK_EMOJIS.map(emoji => {
                             const reaction = (Array.isArray(msg.reactions) ? msg.reactions : [])
                               .find(item => item.emoji === emoji);
@@ -1417,13 +1454,18 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
       {/* ══ Modal: Create Channel ═════════════════════════════════════════ */}
       {showCreateModal && (
-        <div style={styles.modalOverlay}>
+        <div className="modalOverlay" style={styles.modalOverlay}>
           <div className="glass-panel" style={styles.modal}>
             <div style={styles.modalHeader}>
               <h3>Create Channel</h3>
               <button onClick={() => setShowCreateModal(false)} style={styles.modalClose}><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateChannel} style={styles.modalForm}>
+              {channelCreateError && (
+                <div role="alert" style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem' }}>
+                  {channelCreateError}
+                </div>
+              )}
               <div style={styles.modalGroup}>
                 <label style={styles.modalLabel}>Channel Name</label>
                 <input
@@ -1478,7 +1520,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                   ))}
                 </div>
               </div>
-              <button type="submit" style={styles.modalSubmit}>Create Channel</button>
+              <button type="submit" style={styles.modalSubmit} disabled={creatingChannel}>
+                {creatingChannel ? 'Creating...' : 'Create Channel'}
+              </button>
             </form>
           </div>
         </div>
@@ -1486,7 +1530,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
       {/* ══ Modal: New DM ══════════════════════════════════════════════════ */}
       {showDMModal && (
-        <div style={styles.modalOverlay}>
+        <div className="modalOverlay" style={styles.modalOverlay}>
           <div className="glass-panel" style={styles.modal}>
             <div style={styles.modalHeader}>
               <h3>New Conversation</h3>
@@ -1533,7 +1577,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
       {/* ══ Modal: Share Message ══════════════════════════════════════════ */}
       {showForwardModal && forwardingMessage && (
-        <div style={styles.modalOverlay}>
+        <div className="modalOverlay" style={styles.modalOverlay}>
           <div className="glass-panel" style={styles.modal}>
             <div style={styles.modalHeader}>
               <h3>Share Message</h3>
@@ -1585,7 +1629,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
       {/* ══ Modal: Profile Editor ══════════════════════════════════════════ */}
       {showProfileModal && (
-        <div style={styles.modalOverlay}>
+        <div className="modalOverlay" style={styles.modalOverlay}>
           <div className="glass-panel" style={{ ...styles.modal, maxWidth: '400px' }}>
             <div style={styles.modalHeader}>
               <h3>Edit Profile</h3>
