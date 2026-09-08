@@ -120,13 +120,13 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         else next.delete(normalizedUserId);
         return next;
       });
-      setAllUsers(prev => prev.map(u => String(u._id) === normalizedUserId ? { ...u, status } : u));
+      setAllUsers(prev => prev.map(u => String(u._id) === normalizedUserId ? { ...u, status, lastSeen: new Date().toISOString() } : u));
       setChannels(prev => prev.map(ch => {
-        return { ...ch, members: ch.members.map(m => String(m._id) === normalizedUserId ? { ...m, status } : m) };
+        return { ...ch, members: ch.members.map(m => String(m._id) === normalizedUserId ? { ...m, status, lastSeen: new Date().toISOString() } : m) };
       }));
       setActiveChannel(prev => prev ? {
         ...prev,
-        members: prev.members.map(m => String(m._id) === normalizedUserId ? { ...m, status } : m),
+        members: prev.members.map(m => String(m._id) === normalizedUserId ? { ...m, status, lastSeen: new Date().toISOString() } : m),
       } : prev);
     });
 
@@ -243,6 +243,13 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     setUnreadCounts(prev => ({ ...prev, [activeChannel._id]: 0 }));
     if (socket) socket.emit('join_channel', activeChannel._id);
   }, [activeChannel]);
+
+  useEffect(() => {
+    if (!activeChannel) return undefined;
+    const refreshActiveMessages = () => fetchMessages(activeChannel._id);
+    const interval = setInterval(refreshActiveMessages, 15000);
+    return () => clearInterval(interval);
+  }, [activeChannel?._id]);
 
   // ── Data Fetchers ─────────────────────────────────────────────────────
   const fetchChannels = async () => {
@@ -782,8 +789,18 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const typingNames = Object.values(typingState);
   const currentUserOnline = isSocketOnline || Boolean(user?._id);
   const dmRecipient = activeChannel && !activeChannel.isGroup ? getDMRecipient(activeChannel) : null;
-  const dmRecipientOnline = Boolean(dmRecipient && onlineUserIds.has(String(dmRecipient._id)));
-  const isUserOnline = (userId) => onlineUserIds.has(String(userId));
+  const isProfileOnline = (profile) => {
+    if (!profile) return false;
+    if (onlineUserIds.has(String(profile._id))) return true;
+    if (profile.status !== 'online' || !profile.lastSeen) return false;
+    return Date.now() - new Date(profile.lastSeen).getTime() < 45000;
+  };
+  const dmRecipientOnline = isProfileOnline(dmRecipient);
+  const isUserOnline = (userId) => {
+    const profile = allUsers.find(directoryUser => String(directoryUser._id) === String(userId))
+      || activeChannel?.members.find(member => String(member._id) === String(userId));
+    return isProfileOnline(profile);
+  };
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
