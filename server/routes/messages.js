@@ -55,6 +55,54 @@ router.post('/:channelId', protect, async (req, res) => {
   }
 });
 
+// @desc    Toggle a reaction on a message
+// @route   POST /api/messages/:channelId/:messageId/reaction
+// @access  Private
+router.post('/:channelId/:messageId/reaction', protect, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    if (typeof emoji !== 'string' || !emoji.trim() || emoji.length > 16) {
+      return res.status(400).json({ message: 'Invalid reaction' });
+    }
+
+    const channel = await Channel.findById(req.params.channelId);
+    if (!channel || !channel.members.map(member => member.toString()).includes(req.user._id.toString())) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    const message = await Message.findOne({
+      _id: req.params.messageId,
+      channel: channel._id,
+      isDeleted: false,
+    });
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    if (!Array.isArray(message.reactions)) message.reactions = [];
+    const reactionIndex = message.reactions.findIndex(reaction => reaction.emoji === emoji);
+    if (reactionIndex === -1) {
+      message.reactions.push({ emoji, users: [req.user._id] });
+    } else {
+      const reactionUsers = Array.isArray(message.reactions[reactionIndex].users)
+        ? message.reactions[reactionIndex].users
+        : [];
+      const userIndex = reactionUsers.findIndex(reactionUser => reactionUser.toString() === req.user._id.toString());
+      if (userIndex === -1) reactionUsers.push(req.user._id);
+      else reactionUsers.splice(userIndex, 1);
+      message.reactions[reactionIndex].users = reactionUsers;
+      if (reactionUsers.length === 0) message.reactions.splice(reactionIndex, 1);
+    }
+
+    await message.save();
+    channel.updatedAt = new Date();
+    await channel.save();
+    const updated = await populateMessage(Message.findById(message._id));
+    res.json({ messageId: message._id, reactions: updated.reactions });
+  } catch (error) {
+    console.error(`[REACTION] HTTP reaction failed for ${req.user.username}:`, error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @desc    Get all messages for a channel
 // @route   GET /api/messages/:channelId
 // @access  Private

@@ -514,9 +514,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😁'];
 
   // ── React to Message ──────────────────────────────────────────────────
-  const handleReact = (messageId, emoji) => {
-    if (!socket || !socket.connected || !activeChannel) {
-      console.warn('[REACTION] Cannot react: socket is not connected');
+  const handleReact = async (messageId, emoji) => {
+    if (!activeChannel) {
+      console.warn('[REACTION] Cannot react: no active channel');
       return;
     }
 
@@ -544,23 +544,20 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       return { ...msg, reactions };
     }));
 
-    socket.timeout(5000).emit('react_message', {
-      channelId: activeChannel._id,
-      messageId,
-      emoji,
-    }, (timeoutError, result) => {
-      if (timeoutError || !result?.ok) {
-        console.error('[REACTION] Failed:', timeoutError?.message || result?.message || 'No server acknowledgement');
-        fetchMessages(activeChannel._id);
-        return;
-      }
+    try {
+      const response = await axios.post(`/api/messages/${activeChannel._id}/${messageId}/reaction`, { emoji }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
       setMessages(prev => prev.map(msg =>
-        msg._id === result.messageId ? { ...msg, reactions: result.reactions } : msg
+        msg._id === response.data.messageId ? { ...msg, reactions: response.data.reactions } : msg
       ));
       console.log(`[REACTION] Saved ${emoji} for message ${messageId}`);
       setReactionNotice(`${emoji} reaction saved`);
       setTimeout(() => setReactionNotice(''), 1400);
-    });
+    } catch (error) {
+      console.error('[REACTION] Failed:', error.response?.data?.message || error.message);
+      fetchMessages(activeChannel._id);
+    }
   };
 
   const reactionUserId = (reactionUser) => {
