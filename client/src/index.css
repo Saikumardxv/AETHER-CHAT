@@ -1855,3 +1855,50 @@ button:active {
     max-width: calc(100vw - 50px);
   }
 }
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .chatHeader {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .headerInfo {
+    min-width: 0;
+    max-width: calc(100% - 180px);
+  }
+
+  .headerTitle,
+  .headerDesc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .inputForm {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 767px) {
+  .chat-header-action,
+  .chat-theme-toggle,
+  .mobile-menu-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .msg-action-btn {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .inputForm {
+    min-height: 46px;
+  }
+
+  .inputButton {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
