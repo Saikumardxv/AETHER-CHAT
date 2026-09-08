@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import dns from 'dns';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -317,6 +318,14 @@ export const connectDB = async () => {
 
   if (dbUrl) {
     try {
+      const dnsServers = (process.env.MONGODB_DNS_SERVERS || '')
+        .split(',')
+        .map(server => server.trim())
+        .filter(Boolean);
+      if (dnsServers.length > 0) {
+        dns.setServers(dnsServers);
+        console.log(`Using configured MongoDB DNS servers: ${dnsServers.join(', ')}`);
+      }
       console.log('Connecting to external MongoDB URL...');
       const conn = await mongoose.connect(dbUrl);
       console.log(`MongoDB Connected: ${conn.connection.host}`);
