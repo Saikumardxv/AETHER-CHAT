@@ -43,6 +43,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
@@ -469,6 +470,25 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     return `${apiOrigin}${url}`;
   };
 
+  const downloadAttachment = async (url, fileName) => {
+    try {
+      const response = await fetch(resolveMediaUrl(url));
+      if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Attachment download failed:', error);
+      window.open(resolveMediaUrl(url), '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😁'];
 
   // ── React to Message ──────────────────────────────────────────────────
@@ -745,7 +765,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   const typingState = activeChannel ? typingUsers[activeChannel._id] || {} : {};
   const typingNames = Object.values(typingState);
-  const currentUserOnline = isSocketOnline;
+  const currentUserOnline = isSocketOnline || Boolean(user?._id);
   const dmRecipient = activeChannel && !activeChannel.isGroup ? getDMRecipient(activeChannel) : null;
   const dmRecipientOnline = Boolean(dmRecipient && onlineUserIds.has(String(dmRecipient._id)));
   const isUserOnline = (userId) => onlineUserIds.has(String(userId));
@@ -1171,7 +1191,8 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                         src={resolveMediaUrl(msg.fileUrl)}
                                         alt={msg.fileName}
                                         style={styles.imagePreview}
-                                        onClick={() => window.open(resolveMediaUrl(msg.fileUrl))}
+                                        onClick={() => setPreviewImage({ url: resolveMediaUrl(msg.fileUrl), name: msg.fileName })}
+                                        title="Open full image"
                                       />
                                     </div>
                                   ) : (
@@ -1183,10 +1204,12 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                       </div>
                                       <a
                                         href={resolveMediaUrl(msg.fileUrl)}
-                                        download={msg.fileName}
-                                        target="_blank"
-                                        rel="noreferrer"
+                                        onClick={event => {
+                                          event.preventDefault();
+                                          downloadAttachment(msg.fileUrl, msg.fileName);
+                                        }}
                                         style={styles.attachDl}
+                                        title="Download file"
                                       >
                                         <Download size={18} />
                                       </a>
@@ -1449,6 +1472,20 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div className="image-preview-overlay" onClick={() => setPreviewImage(null)} role="dialog" aria-label="Image preview">
+          <button className="image-preview-close" onClick={() => setPreviewImage(null)} aria-label="Close image preview">
+            <X size={22} />
+          </button>
+          <img
+            src={previewImage.url}
+            alt={previewImage.name || 'Full-size attachment'}
+            className="image-preview-full"
+            onClick={event => event.stopPropagation()}
+          />
         </div>
       )}
 

@@ -472,6 +472,42 @@ button:active {
   backdrop-filter: blur(20px);
 }
 
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.86);
+  cursor: zoom-out;
+}
+
+.image-preview-full {
+  max-width: min(96vw, 1400px);
+  max-height: 92dvh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  cursor: default;
+}
+
+.image-preview-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    PHASE 2 STYLES
 ═══════════════════════════════════════════════════════════════════════ */
