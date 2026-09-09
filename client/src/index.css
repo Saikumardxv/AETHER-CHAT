@@ -515,11 +515,12 @@ button:active {
 /* ── Message Row hover/context menu ──────────────────────────────────── */
 .message-row-wrapper {
   position: relative;
-  width: fit-content;
+  width: min(85%, 680px);
 }
 
 .message-row-sent {
   align-self: flex-end !important;
+  margin-left: auto;
   justify-content: flex-end;
   flex-direction: row-reverse !important;
   text-align: right;
@@ -527,6 +528,7 @@ button:active {
 
 .message-row-received {
   align-self: flex-start !important;
+  margin-right: auto;
   justify-content: flex-start;
   flex-direction: row !important;
   text-align: left;
