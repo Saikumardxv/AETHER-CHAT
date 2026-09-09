@@ -48,13 +48,14 @@ const App = () => {
       return;
     }
 
-    // Connect to WebSocket server directly
-    // Using environment port or local dev server address (5000)
+    // Vercel serves the HTTP API, while realtime sockets need a persistent host.
     const socketUrl = import.meta.env.VITE_SOCKET_URL || (
-      window.location.hostname === 'localhost'
-        ? 'http://127.0.0.1:5000'
-        : window.location.origin
+      window.location.hostname === 'localhost' ? 'http://127.0.0.1:5000' : null
     );
+    if (!socketUrl) {
+      console.log('[AUTH] No realtime socket URL configured; using HTTP delivery');
+      return;
+    }
 
     console.log(`Connecting socket to: ${socketUrl}`);
     const token = localStorage.getItem('token');

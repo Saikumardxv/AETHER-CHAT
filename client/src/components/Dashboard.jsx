@@ -537,6 +537,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😁'];
 
+  const hasRealtimeSocket = Boolean(
+    socket?.connected && (import.meta.env.VITE_SOCKET_URL || window.location.hostname === 'localhost')
+  );
+
   // ── React to Message ──────────────────────────────────────────────────
   const handleReact = async (messageId, emoji) => {
     if (!activeChannel) {
@@ -569,7 +573,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     }));
 
     try {
-      if (socket?.connected) {
+      if (hasRealtimeSocket) {
         socket.emit('react_message', {
           channelId: activeChannel._id,
           messageId,
