@@ -71,6 +71,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const profileFileInputRef = useRef(null);
   const channelFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messageStreamRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -297,7 +298,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       });
       setMessages(res.data);
       console.log(`[DM] Conversation history rendered: ${res.data.length} messages in ${channelId}`);
-      scrollToBottom();
+      scrollToBottom({ force: true });
       if (socket && res.data.length > 0) {
         res.data.forEach(msg => {
           const isSender = String(msg.sender?._id) === String(user._id);
@@ -310,8 +311,19 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     } catch (err) { console.error(`[DM] Conversation history failed for ${channelId}:`, err.response?.data?.message || err.message); }
   };
 
-  const scrollToBottom = () => {
-    setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 50);
+  const scrollToBottom = ({ force = false } = {}) => {
+    setTimeout(() => {
+      const stream = messageStreamRef.current;
+      if (!stream) return;
+
+      const distanceFromBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight;
+      if (!force && distanceFromBottom > 120) return;
+
+      stream.scrollTo({
+        top: stream.scrollHeight,
+        behavior: force ? 'auto' : 'smooth',
+      });
+    }, 50);
   };
 
   // ── Toast Notification ────────────────────────────────────────────────
@@ -494,7 +506,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         setMessages(prev => [...prev, response.data]);
         setMessageText('');
         setReplyingTo(null);
-        scrollToBottom();
+        scrollToBottom({ force: true });
       } catch (error) {
         console.error('[DM] HTTP message send failed:', error.response?.data?.message || error.message);
         alert(error.response?.data?.message || 'Message could not be sent.');
@@ -1090,7 +1102,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
             </div>
 
             {/* Message List */}
-            <div className="messageStream" style={styles.messageStream}>
+            <div ref={messageStreamRef} className="messageStream" style={styles.messageStream}>
               {reactionNotice && <div className="reaction-notice" role="status">{reactionNotice}</div>}
               <div style={styles.messageContainerInner}>
 
