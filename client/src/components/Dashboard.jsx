@@ -139,7 +139,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     socket.on('receive_message', (message) => {
       const msgChannelId = message.channel;
       console.log(`[DM] Message received in client: ${message._id}, sender=${message.sender?.username}, channel=${msgChannelId}`);
-      if (activeChannel && activeChannel._id === msgChannelId) {
+      if (activeChannel && String(activeChannel._id) === String(msgChannelId)) {
         setMessages(prev => [...prev, message]);
         console.log(`[DM] Message rendered in active conversation: ${message._id}`);
         scrollToBottom();
@@ -254,9 +254,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   useEffect(() => {
     if (!activeChannel) return undefined;
     const refreshActiveMessages = () => fetchMessages(activeChannel._id);
-    const interval = setInterval(refreshActiveMessages, 15000);
-    return () => clearInterval(interval);
-  }, [activeChannel?._id]);
+    const interval = socket?.connected ? null : setInterval(refreshActiveMessages, 3000);
+    return () => { if (interval) clearInterval(interval); };
+  }, [activeChannel?._id, socket?.connected]);
 
   // ── Data Fetchers ─────────────────────────────────────────────────────
   const fetchChannels = async () => {
