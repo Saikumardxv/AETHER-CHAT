@@ -513,40 +513,72 @@ button:active {
 ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── Message Row hover/context menu ──────────────────────────────────── */
+/* ── Message Row: outer alignment wrapper ──────────────────────────── */
 .message-row-wrapper {
   position: relative;
-  width: min(85%, 680px);
-  margin-bottom: 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-glass-light);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
+  /* width is capped but alignment comes from align-self + margin */
+  max-width: min(80%, 680px);
+  width: fit-content;
+  margin-bottom: 3px;
   isolation: isolate;
+  /* The inner content (avatar + bubble) is a flex row */
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 
+/* Sent messages: pushed to the right side */
 .message-row-sent {
   align-self: flex-end !important;
-  margin-left: auto;
-  justify-content: flex-end;
+  margin-left: auto !important;
+  margin-right: 0 !important;
   flex-direction: row-reverse !important;
+}
+
+/* Received messages: anchored to the left side */
+.message-row-received {
+  align-self: flex-start !important;
+  margin-right: auto !important;
+  margin-left: 0 !important;
+  flex-direction: row !important;
+}
+
+/* Sent bubble style */
+.message-row-sent .msg-bubble {
+  background: rgba(80, 80, 120, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px 18px 4px 18px;
   text-align: right;
 }
 
-.message-row-received {
-  align-self: flex-start !important;
-  margin-right: auto;
-  justify-content: flex-start;
-  flex-direction: row !important;
+/* Received bubble style */
+.message-row-received .msg-bubble {
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-glass-light);
+  border-radius: 18px 18px 18px 4px;
   text-align: left;
 }
 
-.message-row-sent {
-  background: rgba(255, 255, 255, 0.075);
-  border-color: rgba(255, 255, 255, 0.12);
+/* The visual bubble container */
+.msg-bubble {
+  padding: 9px 14px;
+  min-width: 40px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.message-row-received {
-  background: rgba(0, 0, 0, 0.08);
+/* Dark theme overrides */
+.app-theme-dark .message-row-sent .msg-bubble {
+  background: rgba(100, 110, 180, 0.28);
+  border-color: rgba(150, 160, 220, 0.2);
+}
+
+.app-theme-dark .message-row-received .msg-bubble {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .message-row-wrapper:hover .msg-actions {

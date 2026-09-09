@@ -1132,9 +1132,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                       key={msg._id}
                       className={`message-row-wrapper ${isMe ? 'message-row-sent' : 'message-row-received'} animate-fade-in ${actionMessageId === msg._id ? 'actions-visible' : ''}`}
                       style={{
-                        ...styles.messageRow,
-                        ...(isMe ? styles.sentMessageRow : styles.receivedMessageRow),
-                        ...(isCompact ? (isMe ? styles.compactSentRow : styles.compactRow) : {}),
+                        marginTop: isCompact ? '2px' : '12px',
                       }}
                       onTouchStart={() => startLongPress(msg._id)}
                       onTouchEnd={cancelLongPress}
@@ -1236,20 +1234,26 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                         </div>
                       )}
 
-                      {/* Avatar (shown on first message in group) */}
-                      {!isCompact && (
+                      {/* Avatar — received messages: left side, first of group */}
+                      {!isMe && !isCompact && (
                         <img
                           src={msg.sender.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${msg.sender.username}`}
                           alt=""
                           className="avatar"
-                          style={{ flexShrink: 0 }}
+                          style={{ flexShrink: 0, alignSelf: 'flex-end' }}
                         />
                       )}
+                      {/* Spacer so compact received messages still indent under avatar */}
+                      {!isMe && isCompact && (
+                        <div style={{ width: 40, flexShrink: 0 }} />
+                      )}
 
-                      <div style={styles.messageContentBlock}>
+                      {/* ── Message bubble ── */}
+                      <div className="msg-bubble">
+                        {/* Sender name + time — first message of a group */}
                         {!isCompact && (
-                          <div style={styles.messageMeta}>
-                            <span style={styles.senderName}>{msg.sender.username}</span>
+                          <div style={{ ...styles.messageMeta, flexDirection: isMe ? 'row-reverse' : 'row' }}>
+                            {!isMe && <span style={styles.senderName}>{msg.sender.username}</span>}
                             <span style={styles.messageTime}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
@@ -1341,6 +1345,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                           )}
                         </div>
 
+                        {/* Reactions */}
                         {!msg.isDeleted && Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
                           <div className="message-reaction-summary" aria-label="Message reactions">
                             {msg.reactions.map(reaction => (
@@ -1382,9 +1387,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                           </div>
                         )}
 
-                        {/* Read receipts */}
-                        {isMe && !isCompact && !msg.isDeleted && (
-                          <div style={styles.receiptContainer}>
+                        {/* Read receipts — only for sent messages */}
+                        {isMe && !msg.isDeleted && (
+                          <div style={{ ...styles.receiptContainer, justifyContent: 'flex-end' }}>
                             {isReadByAll ? (
                               <CheckCheck size={14} style={{ color: 'var(--color-success)' }} />
                             ) : isDelivered ? (
@@ -1394,7 +1399,20 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                             )}
                           </div>
                         )}
-                      </div>
+                      </div>{/* end msg-bubble */}
+
+                      {/* Avatar — sent messages: right side, first of group */}
+                      {isMe && !isCompact && (
+                        <img
+                          src={msg.sender.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${msg.sender.username}`}
+                          alt=""
+                          className="avatar"
+                          style={{ flexShrink: 0, alignSelf: 'flex-end' }}
+                        />
+                      )}
+                      {isMe && isCompact && (
+                        <div style={{ width: 40, flexShrink: 0 }} />
+                      )}
                     </div>
                   );
                 })}
@@ -2028,38 +2046,7 @@ const styles = {
   messageContainerInner: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-  },
-  messageRow: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '14px',
-    maxWidth: '85%',
-    minWidth: 0,
-    boxSizing: 'border-box',
-  },
-  sentMessageRow: {
-    alignSelf: 'flex-end',
-    flexDirection: 'row-reverse',
-  },
-  receivedMessageRow: {
-    alignSelf: 'flex-start',
-  },
-  compactRow: {
-    marginTop: '-12px',
-    paddingLeft: '54px',
-  },
-  compactSentRow: {
-    marginTop: '-12px',
-    paddingRight: '54px',
-  },
-  messageContentBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    width: '100%',
-    minWidth: 0,
-    overflow: 'hidden',
+    /* gap is now handled by marginTop on each row */
   },
   messageMeta: {
     display: 'flex',
