@@ -614,6 +614,16 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       || (String(user._id) === reactionId ? user : reactionUser);
   };
 
+  const toggleReactionUsers = (event, messageId, emoji) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedReaction(current => (
+      current?.messageId === messageId && current.emoji === emoji
+        ? null
+        : { messageId, emoji }
+    ));
+  };
+
   // ── Edit Message ──────────────────────────────────────────────────────
   const startEdit = (msg) => {
     setEditingMessageId(msg._id);
@@ -1314,28 +1324,29 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
                                 <button
                                   type="button"
                                   className={`message-reaction-summary-item ${selectedReaction?.messageId === msg._id && selectedReaction.emoji === reaction.emoji ? 'selected-reaction' : ''}`}
-                                  onClick={() => setSelectedReaction(current => (
-                                    current?.messageId === msg._id && current.emoji === reaction.emoji
-                                      ? null
-                                      : { messageId: msg._id, emoji: reaction.emoji }
-                                  ))}
+                                  onClick={event => toggleReactionUsers(event, msg._id, reaction.emoji)}
+                                  onTouchStart={event => event.stopPropagation()}
+                                  onTouchEnd={event => event.stopPropagation()}
                                   title="View people who reacted"
                                 >
                                   {reaction.emoji} {Array.isArray(reaction.users) ? reaction.users.length : 0}
                                 </button>
                                 {selectedReaction?.messageId === msg._id && selectedReaction.emoji === reaction.emoji && (
-                                  <div className="reaction-user-list">
+                                  <div className="reaction-user-list" role="dialog" aria-label={`People who reacted with ${reaction.emoji}`}>
                                     {(Array.isArray(reaction.users) ? reaction.users : []).map(reactionUser => (
                                       (() => {
                                         const reactionProfile = getReactionUserProfile(reactionUser);
+                                        const reactionName = reactionProfile?.username || (
+                                          reactionUserId(reactionUser) === String(user._id) ? user.username : 'User'
+                                        );
                                         return (
                                           <div key={reactionUserId(reactionUser)} className="reaction-user-item">
                                             <img
-                                              src={reactionProfile?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${reactionProfile?.username || reactionUserId(reactionUser)}`}
+                                              src={reactionProfile?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${reactionName}`}
                                               alt=""
                                               className="avatar xs"
                                             />
-                                            <span>{reactionProfile?.username || 'User'}</span>
+                                            <span>{reactionName}</span>
                                           </div>
                                         );
                                       })()
