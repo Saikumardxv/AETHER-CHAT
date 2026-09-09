@@ -355,6 +355,7 @@ export const initSocket = (io) => {
       const addedSockets = onlineUsers.get(addedId);
       if (addedSockets) {
         addedSockets.forEach(sockId => {
+          io.sockets.sockets.get(sockId)?.join(channelId);
           io.to(sockId).emit('added_to_channel', { channelId });
         });
       }

@@ -152,6 +152,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     socket.on('channel_updated', () => { fetchChannels(); });
 
     socket.on('added_to_channel', ({ channelId }) => {
+      socket.emit('join_channel', channelId);
       fetchChannels();
       setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
     });
@@ -425,6 +426,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   };
 
   const uploadFile = async (file) => {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be 10 MB or less.');
+      return;
+    }
     setUploadingFile(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -456,10 +461,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   };
 
   // ── Send Message ──────────────────────────────────────────────────────
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageText.trim() && !selectedFile) return;
-    if (socket && activeChannel) {
+    if (socket?.connected && activeChannel) {
       console.log(`[DM] Sending text from ${user.username}: channel=${activeChannel._id}, textLength=${messageText.length}`);
       socket.emit('send_message', {
         channelId: activeChannel._id,
@@ -469,6 +474,25 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       socket.emit('stop_typing', { channelId: activeChannel._id });
       setMessageText('');
       setReplyingTo(null);
+      return;
+    }
+
+    if (activeChannel) {
+      try {
+        const response = await axios.post(`/api/messages/${activeChannel._id}`, {
+          content: messageText,
+          replyTo: replyingTo?._id || null,
+        }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        setMessages(prev => [...prev, response.data]);
+        setMessageText('');
+        setReplyingTo(null);
+        scrollToBottom();
+      } catch (error) {
+        console.error('[DM] HTTP message send failed:', error.response?.data?.message || error.message);
+        alert(error.response?.data?.message || 'Message could not be sent.');
+      }
     }
   };
 
@@ -545,6 +569,19 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     }));
 
     try {
+      if (socket?.connected) {
+        socket.emit('react_message', {
+          channelId: activeChannel._id,
+          messageId,
+          emoji,
+        }, response => {
+          if (!response?.ok) fetchMessages(activeChannel._id);
+        });
+        setReactionNotice(`${emoji} reaction saved`);
+        setTimeout(() => setReactionNotice(''), 1400);
+        return;
+      }
+
       const response = await axios.post(`/api/messages/${activeChannel._id}/${messageId}/reaction`, { emoji }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -709,6 +746,16 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const handleProfileAvatarChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Profile picture must be 10 MB or less.');
+      event.target.value = '';
+      return;
+    }
     setAvatarUploading(true);
     try {
       const imageUrl = await new Promise((resolve, reject) => {
@@ -743,6 +790,16 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const handleChannelAvatarChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Channel picture must be 10 MB or less.');
+      event.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setNewChannelAvatar(String(reader.result));
     reader.readAsDataURL(file);

@@ -66,6 +66,8 @@ const io = new Server(server, {
   maxHttpBufferSize: 15 * 1024 * 1024
 });
 
+app.set('io', io);
+
 // Initialize Sockets logic
 initSocket(io);
 

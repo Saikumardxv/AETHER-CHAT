@@ -48,7 +48,9 @@ router.post('/:channelId', protect, async (req, res) => {
 
     channel.updatedAt = new Date();
     await channel.save();
-    res.status(201).json(await populateMessage(Message.findById(message._id)));
+    const populatedMessage = await populateMessage(Message.findById(message._id));
+    req.app.get('io')?.to(channel._id.toString()).emit('receive_message', populatedMessage);
+    res.status(201).json(populatedMessage);
   } catch (error) {
     console.error(`[DM] HTTP message creation failed for ${req.user.username}:`, error.message);
     res.status(500).json({ message: error.message });
@@ -96,6 +98,11 @@ router.post('/:channelId/:messageId/reaction', protect, async (req, res) => {
     channel.updatedAt = new Date();
     await channel.save();
     const updated = await populateMessage(Message.findById(message._id));
+    req.app.get('io')?.to(channel._id.toString()).emit('message_reaction', {
+      messageId: message._id,
+      channelId: channel._id,
+      reactions: updated.reactions,
+    });
     res.json({ messageId: message._id, reactions: updated.reactions });
   } catch (error) {
     console.error(`[REACTION] HTTP reaction failed for ${req.user.username}:`, error.message);
@@ -117,7 +124,7 @@ router.get('/:channelId', protect, async (req, res) => {
       return res.status(404).json({ message: 'Channel not found' });
     }
 
-    if (!channel.members.includes(req.user._id)) {
+    if (!channel.members.some(member => member.toString() === req.user._id.toString())) {
       console.warn(`[DM] History denied: ${req.user.username} is not a member of ${channelId}`);
       return res.status(403).json({ message: 'Not authorized to view messages in this channel' });
     }
@@ -152,7 +159,7 @@ router.get('/:channelId/search', protect, async (req, res) => {
       return res.status(404).json({ message: 'Channel not found' });
     }
 
-    if (!channel.members.includes(req.user._id)) {
+    if (!channel.members.some(member => member.toString() === req.user._id.toString())) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
