@@ -2016,7 +2016,7 @@ const styles = {
   messageContainerInner: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '18px',
+    gap: '12px',
   },
   messageRow: {
     display: 'flex',

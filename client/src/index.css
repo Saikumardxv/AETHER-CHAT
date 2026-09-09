@@ -516,6 +516,12 @@ button:active {
 .message-row-wrapper {
   position: relative;
   width: min(85%, 680px);
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-glass-light);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  isolation: isolate;
 }
 
 .message-row-sent {
@@ -532,6 +538,15 @@ button:active {
   justify-content: flex-start;
   flex-direction: row !important;
   text-align: left;
+}
+
+.message-row-sent {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.message-row-received {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .message-row-wrapper:hover .msg-actions {
@@ -918,6 +933,19 @@ button:active {
 
 .app-theme-light .messageStream {
   background: radial-gradient(circle at 75% 15%, rgba(255, 255, 255, 0.58), transparent 34%), var(--bg-main);
+}
+
+.app-theme-light .message-row-wrapper {
+  background: rgba(255, 255, 255, 0.42);
+  border-color: var(--border-glass-light);
+}
+
+.app-theme-light .message-row-sent {
+  background: rgba(23, 23, 23, 0.08);
+}
+
+.app-theme-light .message-row-received {
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .reaction-pill .r-emoji {
