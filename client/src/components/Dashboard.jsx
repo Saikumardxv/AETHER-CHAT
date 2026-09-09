@@ -470,7 +470,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageText.trim() && !selectedFile) return;
-    if (socket?.connected && activeChannel) {
+    if (hasRealtimeSocket && activeChannel) {
       console.log(`[DM] Sending text from ${user.username}: channel=${activeChannel._id}, textLength=${messageText.length}`);
       socket.emit('send_message', {
         channelId: activeChannel._id,
@@ -603,6 +603,8 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       setTimeout(() => setReactionNotice(''), 1400);
     } catch (error) {
       console.error('[REACTION] Failed:', error.response?.data?.message || error.message);
+      setReactionNotice(error.response?.data?.message || 'Reaction could not be saved');
+      setTimeout(() => setReactionNotice(''), 1800);
       fetchMessages(activeChannel._id);
     }
   };
