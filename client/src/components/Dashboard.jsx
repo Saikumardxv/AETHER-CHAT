@@ -247,7 +247,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     setSearchedMessages(null);
     setReplyingTo(null);
     setEditingMessageId(null);
-    fetchMessages(activeChannel._id);
+    fetchMessages(activeChannel._id, { scrollToLatest: true });
     setUnreadCounts(prev => ({ ...prev, [activeChannel._id]: 0 }));
     if (socket) socket.emit('join_channel', activeChannel._id);
   }, [activeChannel]);
@@ -290,7 +290,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
     } catch (err) { console.error('Fetch users failed:', err); }
   };
 
-  const fetchMessages = async (channelId) => {
+  const fetchMessages = async (channelId, { scrollToLatest = false } = {}) => {
     console.log(`[DM] Loading conversation history: ${channelId}`);
     try {
       const res = await axios.get(`/api/messages/${channelId}`, {
@@ -298,7 +298,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       });
       setMessages(res.data);
       console.log(`[DM] Conversation history rendered: ${res.data.length} messages in ${channelId}`);
-      scrollToBottom({ force: true });
+      scrollToBottom({ force: scrollToLatest });
       if (socket && res.data.length > 0) {
         res.data.forEach(msg => {
           const isSender = String(msg.sender?._id) === String(user._id);
