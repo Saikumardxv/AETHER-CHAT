@@ -19,6 +19,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   const [messageText, setMessageText] = useState('');
   const [typingUsers, setTypingUsers] = useState({});
   const [isSocketOnline, setIsSocketOnline] = useState(Boolean(socket?.connected));
+  const [isPresenceOnline, setIsPresenceOnline] = useState(user.status === 'online');
   const [onlineUserIds, setOnlineUserIds] = useState(() => new Set());
   const [reactionNotice, setReactionNotice] = useState('');
   const [selectedReaction, setSelectedReaction] = useState(null);
@@ -83,12 +84,17 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   }, []);
 
   useEffect(() => {
-    const heartbeat = () => {
-      axios.put('/api/auth/profile', { status: 'online' }, {
+    const heartbeat = async () => {
+      try {
+        await axios.put('/api/auth/profile', { status: 'online' }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      }).catch(error => console.warn('[AUTH] Presence heartbeat failed:', error.message));
-      fetchChannels();
-      fetchUsers();
+        });
+        setIsPresenceOnline(true);
+        await Promise.all([fetchChannels(), fetchUsers()]);
+      } catch (error) {
+        setIsPresenceOnline(false);
+        console.warn('[AUTH] Presence heartbeat failed:', error.message);
+      }
     };
     heartbeat();
     const interval = setInterval(heartbeat, 15000);
@@ -137,7 +143,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
         setMessages(prev => [...prev, message]);
         console.log(`[DM] Message rendered in active conversation: ${message._id}`);
         scrollToBottom();
-        if (message.sender._id !== user._id) {
+        if (String(message.sender?._id) !== String(user._id)) {
           socket.emit('read_message', { channelId: msgChannelId, messageId: message._id });
         }
       } else {
@@ -294,7 +300,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       scrollToBottom();
       if (socket && res.data.length > 0) {
         res.data.forEach(msg => {
-          const isSender = msg.sender._id === user._id;
+          const isSender = String(msg.sender?._id) === String(user._id);
           const readByMe = msg.readBy.some(r => r.user?._id === user._id || r.user === user._id);
           if (!isSender && !readByMe && !msg.isDeleted) {
             socket.emit('read_message', { channelId, messageId: msg._id });
@@ -855,7 +861,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
   const typingState = activeChannel ? typingUsers[activeChannel._id] || {} : {};
   const typingNames = Object.values(typingState);
-  const currentUserOnline = isSocketOnline || Boolean(user?._id);
+  const currentUserOnline = isSocketOnline || isPresenceOnline;
   const dmRecipient = activeChannel && !activeChannel.isGroup ? getDMRecipient(activeChannel) : null;
   const isProfileOnline = (profile) => {
     if (!profile) return false;
@@ -1097,13 +1103,13 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
 
                 {(searchedMessages || messages).map((msg, idx, arr) => {
                   if (hiddenMessageIds.has(msg._id)) return null;
-                  const isMe = msg.sender._id === user._id;
+                  const isMe = String(msg.sender?._id) === String(user._id);
                   const isReadByAll = activeChannel.members.length > 1 &&
                     msg.readBy.length >= activeChannel.members.length;
                   const isDelivered = msg.readBy.length > 1;
                   const prevMsg = idx > 0 ? arr[idx - 1] : null;
                   const isCompact = prevMsg &&
-                    prevMsg.sender._id === msg.sender._id &&
+                    String(prevMsg.sender?._id) === String(msg.sender?._id) &&
                     (new Date(msg.createdAt) - new Date(prevMsg.createdAt)) < 5 * 60 * 1000;
                   const isEditing = editingMessageId === msg._id;
 
