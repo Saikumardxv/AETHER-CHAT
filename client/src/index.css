@@ -1598,15 +1598,25 @@ button:active {
 
 .messageContentBlock,
 .messageTextBody,
-.msgText,
 .headerInfo {
   min-width: 0;
+  max-width: 100%;
+}
+
+.messageContentBlock {
+  overflow: hidden;
+}
+
+.msgText {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .msgText,
 .reply-quote-text,
 .attachmentName {
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (min-width: 768px) and (max-width: 1100px) {
@@ -1811,10 +1821,21 @@ button:active {
   .imageAttachment,
   .imagePreview {
     max-width: 100%;
+    width: 100%;
   }
 
   .imagePreview {
     height: auto;
+    max-height: 200px;
+  }
+
+  .fileAttachment {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .attachmentName {
+    font-size: 0.75rem;
   }
 
   .details-drawer {
