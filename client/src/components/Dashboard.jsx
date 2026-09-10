@@ -679,9 +679,7 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
   // ── Delete Message ────────────────────────────────────────────────────
   const handleDelete = (messageId) => {
     if (!socket || !activeChannel) return;
-    setMessages(prev => prev.map(msg =>
-      msg._id === messageId ? { ...msg, isDeleted: true, content: '', fileUrl: '', fileName: '', fileType: '' } : msg
-    ));
+    setMessages(prev => prev.filter(msg => String(msg._id) !== String(messageId)));
     setActionMessageId(null);
     socket.emit('delete_message', { channelId: activeChannel._id, messageId });
   };
