@@ -63,7 +63,7 @@ router.post('/register', async (req, res) => {
       password: await bcrypt.hash(password, 10),
       avatarUrl: randomAvatar,
       status: 'offline',
-      isEmailVerified: true,
+      isEmailVerified: false,
       emailVerificationCode,
     });
 

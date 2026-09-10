@@ -309,16 +309,15 @@ export const initSocket = (io) => {
           return socket.emit('error_message', { message: 'Not authorized' });
         }
 
-        message.isDeleted = true;
-        message.content = '';
-        message.fileUrl = '';
-        message.fileName = '';
-        message.fileType = '';
-        await message.save();
+        // Permanently delete from DB
+        await Message.findByIdAndDelete(messageId);
+        console.log(`[DM] Message permanently deleted: ${messageId} by ${socket.user.username}`);
 
+        // Notify all channel members to remove it from their view
         io.to(channelId).emit('message_deleted', { messageId, channelId });
       } catch (err) {
         console.error('Error deleting message:', err);
+        socket.emit('error_message', { message: 'Failed to delete message' });
       }
     });
 

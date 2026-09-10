@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import bcrypt from 'bcryptjs';
 import dns from 'dns';
 import fs from 'fs';
 import path from 'path';
@@ -167,7 +168,18 @@ const createMockModel = (modelName, schema) => {
       }
     }
 
+    isModified(field) {
+      if (field === 'password') {
+        return !String(this.password || '').startsWith('$2');
+      }
+      return true;
+    }
+
     async save() {
+      if (modelName === 'User' && typeof this.password === 'string' && !this.password.startsWith('$2')) {
+        this.password = await bcrypt.hash(this.password, 10);
+      }
+
       // Trigger pre-save hooks
       if (schema && schema.preHooks && schema.preHooks['save']) {
         for (const hook of schema.preHooks['save']) {

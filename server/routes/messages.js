@@ -208,7 +208,7 @@ router.put('/:messageId', protect, async (req, res) => {
   }
 });
 
-// @desc    Soft-delete a message
+// @desc    Permanently delete a message
 // @route   DELETE /api/messages/:messageId
 // @access  Private (sender only)
 router.delete('/:messageId', protect, async (req, res) => {
@@ -223,14 +223,16 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this message' });
     }
 
-    message.isDeleted = true;
-    message.content = '';
-    message.fileUrl = '';
-    message.fileName = '';
-    message.fileType = '';
-    await message.save();
+    const channelId = message.channel;
+    await Message.findByIdAndDelete(req.params.messageId);
 
-    res.json({ messageId: message._id, channelId: message.channel });
+    // Broadcast deletion to all channel members via socket
+    req.app.get('io')?.to(channelId.toString()).emit('message_deleted', {
+      messageId: req.params.messageId,
+      channelId,
+    });
+
+    res.json({ messageId: req.params.messageId, channelId });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

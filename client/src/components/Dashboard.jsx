@@ -141,7 +141,11 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       const msgChannelId = message.channel;
       console.log(`[DM] Message received in client: ${message._id}, sender=${message.sender?.username}, channel=${msgChannelId}`);
       if (activeChannel && String(activeChannel._id) === String(msgChannelId)) {
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          // Deduplicate: don't add if already present
+          if (prev.some(m => String(m._id) === String(message._id))) return prev;
+          return [...prev, message];
+        });
         console.log(`[DM] Message rendered in active conversation: ${message._id}`);
         scrollToBottom();
         if (String(message.sender?._id) !== String(user._id)) {
@@ -156,7 +160,10 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       }
     });
 
-    socket.on('channel_updated', () => { fetchChannels(); });
+    socket.on('channel_updated', ({ channelId }) => {
+      if (channelId) socket.emit('join_channel', channelId);
+      fetchChannels();
+    });
 
     socket.on('added_to_channel', ({ channelId }) => {
       socket.emit('join_channel', channelId);
@@ -209,11 +216,9 @@ const Dashboard = ({ user, socket, onLogout, theme, onToggleTheme }) => {
       ));
     });
 
-    // Phase 2: delete update
+    // Phase 2: delete update — permanently remove from state
     socket.on('message_deleted', ({ messageId }) => {
-      setMessages(prev => prev.map(msg =>
-        msg._id === messageId ? { ...msg, isDeleted: true, content: '', fileUrl: '', fileName: '', fileType: '' } : msg
-      ));
+      setMessages(prev => prev.filter(msg => String(msg._id) !== String(messageId)));
       setActionMessageId(null);
     });
 

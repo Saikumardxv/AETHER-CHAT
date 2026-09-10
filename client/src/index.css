@@ -1,4 +1,5 @@
 :root {
+  --app-height: 100dvh;
   font-family: 'Outfit', 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -1590,7 +1591,7 @@ button:active {
 /* Viewport-safe sizing for desktop, tablet, and mobile browsers. */
 .app-container {
   width: 100%;
-  height: 100dvh;
+  height: var(--app-height);
   min-height: 0;
   overflow: hidden;
 }
@@ -1610,7 +1611,7 @@ button:active {
 
 .modalOverlay {
   width: 100%;
-  height: 100dvh;
+  height: var(--app-height);
   padding: clamp(12px, 3vw, 32px);
   overflow-y: auto;
 }
@@ -1618,13 +1619,13 @@ button:active {
 .modal,
 .profile-modal {
   width: min(100%, 440px);
-  max-height: calc(100dvh - 24px);
+  max-height: calc(var(--app-height) - 24px);
   overflow-y: auto;
 }
 
 .auth-screen .glass-panel {
   width: min(100%, 440px);
-  max-height: calc(100dvh - 32px);
+  max-height: calc(var(--app-height) - 32px);
   overflow-y: auto;
 }
 
