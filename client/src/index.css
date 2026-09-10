@@ -1990,3 +1990,43 @@ button:active {
     min-height: 36px;
   }
 }
+
+/* Final mobile viewport contract: only the message list may scroll. */
+@media (max-width: 767px) {
+  html,
+  body,
+  #root,
+  .app-theme,
+  .app-container,
+  .chat-area {
+    height: var(--app-height) !important;
+    max-height: var(--app-height) !important;
+    min-height: 0 !important;
+  }
+
+  .chat-area {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .chatHeader,
+  .input-area {
+    flex: 0 0 auto !important;
+  }
+
+  .messageStream {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-bottom: 18px !important;
+  }
+
+  .input-area {
+    position: relative !important;
+    z-index: 2;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+}
